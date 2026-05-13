@@ -33,4 +33,4 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-replace golang.org/x/text => golang.org/x/text v0.36.0
+replace golang.org/x/text => golang.org/x/text v0.37.0
