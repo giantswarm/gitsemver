@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/go-errors/errors"
-	"github.com/go-git/go-billy/v5"
+	billy "github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/osfs"
-	"github.com/go-git/go-git/v5"
+	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/cache"
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -31,12 +31,15 @@ var tagPrefixEnvVarName = "GS_GIT_TAG_PREFIX"
 var prefixedTagRegex = regexp.MustCompile(`^[a-zA-Z0-9-_]+/v[0-9]+\.[0-9]+\.[0-9]+`)
 
 var branchEnvVarName = "GS_BRANCH_NAME"
+
 // branchSanitizeRegex replaces one or more consecutive invalid semVer
 // pre-release characters with a single hyphen.
 var branchSanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9-]+`)
 
 // nowFunc is the clock used for dev build timestamps; overridable in tests.
 var nowFunc = time.Now
+
+const unknownBranch = "unknown"
 
 // currentBranch returns the name of the branch to embed in dev build versions.
 // Priority: GS_BRANCH_NAME env var > HEAD branch of CWD git repo > "unknown".
@@ -46,11 +49,11 @@ func currentBranch() string {
 	}
 	repo, err := git.PlainOpenWithOptions(".", &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
-		return "unknown"
+		return unknownBranch
 	}
 	head, err := repo.Head()
 	if err != nil {
-		return "unknown"
+		return unknownBranch
 	}
 	return head.Name().Short()
 }

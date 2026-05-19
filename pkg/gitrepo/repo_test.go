@@ -14,13 +14,25 @@ import (
 
 	"github.com/go-errors/errors"
 
-	"github.com/go-git/go-git/v5"
+	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/google/go-cmp/cmp"
 )
 
 var update = flag.Bool("update", false, "update .golden files")
+
+const (
+	testGitHubURL         = "git@github.com:giantswarm/gitrepo-test.git"
+	testTagV200           = "v2.0.0"
+	testVersion200        = "2.0.0"
+	testBranchName        = "test-branch"
+	testDevVersion001     = "0.0.1-dev.test-branch.20260127.094959"
+	testDevVersion201     = "2.0.1-dev.test-branch.20260127.094959"
+	testOriginBranchOf200 = "origin/branch-of-2.0.0"
+	testCommitSHA4707     = "4707825fd7775c69fbd2f72a990e315b367b5409"
+	testFileDCO           = "DCO"
+)
 
 // Test_New_optionalURL tests if proper URL from origin branch is taken from
 // existing repository if none is specified.
@@ -32,13 +44,13 @@ func Test_New_optionalURL(t *testing.T) {
 	dir := "/tmp/gitrepo-test-new-optionalurl"
 	defer func() { _ = os.RemoveAll(dir) }()
 
-	url := "git@github.com:giantswarm/gitrepo-test.git"
+	url := testGitHubURL
 
 	// Clone the repo first.
 	{
 		c := Config{
 			Dir: dir,
-			URL: "git@github.com:giantswarm/gitrepo-test.git",
+			URL: testGitHubURL,
 		}
 
 		repo, err := New(c)
@@ -125,7 +137,7 @@ func Test_Repo_Head(t *testing.T) {
 
 		c := Config{
 			Dir: dir,
-			URL: "git@github.com:giantswarm/gitrepo-test.git",
+			URL: testGitHubURL,
 		}
 		repo, err = New(c)
 		if err != nil {
@@ -278,8 +290,8 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 		{
 			name:            "case 1: another version tag",
 			inputHeadTarget: masterTarget,
-			inputRef:        "v2.0.0",
-			expectedVersion: "2.0.0",
+			inputRef:        testTagV200,
+			expectedVersion: testVersion200,
 		},
 		{
 			name:            "case 2: tagged commit",
@@ -291,56 +303,56 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 			name:            "case 3: another tagged commit",
 			inputHeadTarget: masterTarget,
 			inputRef:        "22b04802cd5ee933de078344fa53a3e37b826913",
-			expectedVersion: "2.0.0",
+			expectedVersion: testVersion200,
 		},
 		{
 			name:            "case 4: untagged commit without tagged parent",
 			inputHeadTarget: masterTarget,
-			environment:     map[string]string{branchEnvVarName: "test-branch"},
+			environment:     map[string]string{branchEnvVarName: testBranchName},
 			inputRef:        "2091354c7b8659f1846a876fbe2032fd1390d569",
-			expectedVersion: "0.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: testDevVersion001,
 		},
 		{
 			name:            "case 5: untagged commit without tagged parent with detached head",
 			inputHeadTarget: "2091354c7b8659f1846a876fbe2032fd1390d569",
-			environment:     map[string]string{branchEnvVarName: "test-branch"},
+			environment:     map[string]string{branchEnvVarName: testBranchName},
 			inputRef:        "HEAD",
-			expectedVersion: "0.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: testDevVersion001,
 		},
 		{
 			name:            "case 6: untagged commit with single tagged parent",
 			inputHeadTarget: masterTarget,
-			environment:     map[string]string{branchEnvVarName: "test-branch"},
+			environment:     map[string]string{branchEnvVarName: testBranchName},
 			inputRef:        "5ff7013b7a5f43d39b8da62361cfbfd4d3bf9a50",
 			expectedVersion: "1.0.1-dev.test-branch.20260127.094959",
 		},
 		{
 			name:            "case 7: another untagged commit with single tagged parent",
 			inputHeadTarget: masterTarget,
-			environment:     map[string]string{branchEnvVarName: "test-branch"},
+			environment:     map[string]string{branchEnvVarName: testBranchName},
 			inputRef:        "0c57573cece531f840a167aa0ccc29b178b6de42",
-			expectedVersion: "2.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: testDevVersion201,
 		},
 		{
 			name:            "case 8: untagged commit with multiple tagged parents",
 			inputHeadTarget: masterTarget,
-			environment:     map[string]string{branchEnvVarName: "test-branch"},
+			environment:     map[string]string{branchEnvVarName: testBranchName},
 			inputRef:        "c3726de44a2bb1bd898fdbe5632a90841636fa82",
-			expectedVersion: "2.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: testDevVersion201,
 		},
 		{
 			name:            "case 9: untagged branch with single tagged parent",
 			inputHeadTarget: masterTarget,
-			environment:     map[string]string{branchEnvVarName: "test-branch"},
-			inputRef:        "origin/branch-of-2.0.0",
-			expectedVersion: "2.0.1-dev.test-branch.20260127.094959",
+			environment:     map[string]string{branchEnvVarName: testBranchName},
+			inputRef:        testOriginBranchOf200,
+			expectedVersion: testDevVersion201,
 		},
 		{
 			name:            "case 10: untagged branch with multiple tagged parents",
 			inputHeadTarget: masterTarget,
-			environment:     map[string]string{branchEnvVarName: "test-branch"},
+			environment:     map[string]string{branchEnvVarName: testBranchName},
 			inputRef:        "origin/branch-of-1.0.0",
-			expectedVersion: "2.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: testDevVersion201,
 		},
 		{
 			name:            "case 11: unknown reference",
@@ -351,9 +363,9 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 		{
 			name:            "case 12: resolving complex tree with multiple common parents and long history",
 			inputHeadTarget: masterTarget,
-			environment:     map[string]string{branchEnvVarName: "test-branch"},
+			environment:     map[string]string{branchEnvVarName: testBranchName},
 			inputRef:        "origin/complex-tree",
-			expectedVersion: "0.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: testDevVersion001,
 		},
 		{
 			name:            "case 13: ...",
@@ -362,7 +374,7 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 				tagPrefixEnvVarName: "module-c",
 			},
 			inputRef:        "ab61bc963b844551ffaf080f84d217e483323210",
-			expectedVersion: "2.0.0",
+			expectedVersion: testVersion200,
 		},
 		{
 			name:            "case 14: ...",
@@ -370,7 +382,7 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 			environment: map[string]string{
 				tagPrefixEnvVarName: "module-a",
 			},
-			inputRef:        "4707825fd7775c69fbd2f72a990e315b367b5409",
+			inputRef:        testCommitSHA4707,
 			expectedVersion: "0.1.1",
 		},
 		{
@@ -379,7 +391,7 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 			environment: map[string]string{
 				tagPrefixEnvVarName: "module-c",
 			},
-			inputRef:        "4707825fd7775c69fbd2f72a990e315b367b5409",
+			inputRef:        testCommitSHA4707,
 			expectedVersion: "1.1.0",
 		},
 		{
@@ -387,9 +399,9 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 			inputHeadTarget: monorepoTarget,
 			environment: map[string]string{
 				tagPrefixEnvVarName: "module-b",
-				branchEnvVarName:    "test-branch",
+				branchEnvVarName:    testBranchName,
 			},
-			inputRef:        "4707825fd7775c69fbd2f72a990e315b367b5409",
+			inputRef:        testCommitSHA4707,
 			expectedVersion: "0.2.1-dev.test-branch.20260127.094959",
 		},
 		{
@@ -397,17 +409,17 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 			inputHeadTarget: monorepoTarget,
 			environment: map[string]string{
 				tagPrefixEnvVarName: "module-not-exist",
-				branchEnvVarName:    "test-branch",
+				branchEnvVarName:    testBranchName,
 			},
 			inputRef:        "57aae3db71bcd176dd5a39eb8b487aae54930dcd",
-			expectedVersion: "0.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: testDevVersion001,
 		},
 		{
 			name:            "case 18: ...",
 			inputHeadTarget: monorepoTarget,
-			environment:     map[string]string{branchEnvVarName: "test-branch"},
+			environment:     map[string]string{branchEnvVarName: testBranchName},
 			inputRef:        "ab61bc963b844551ffaf080f84d217e483323210",
-			expectedVersion: "2.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: testDevVersion201,
 		},
 		{
 			name:            "case 19: ...",
@@ -415,9 +427,9 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 			inputRef:        "35d336b84623963eb4a9ea554b4ebf3f93a5d63d",
 			environment: map[string]string{
 				tagPrefixEnvVarName: "module-a",
-				branchEnvVarName:    "test-branch",
+				branchEnvVarName:    testBranchName,
 			},
-			expectedVersion: "0.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: testDevVersion001,
 		},
 	}
 
@@ -426,7 +438,7 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 
 	c := Config{
 		Dir: dir,
-		URL: "git@github.com:giantswarm/gitrepo-test.git",
+		URL: testGitHubURL,
 	}
 	repo, err := New(c)
 	if err != nil {
@@ -514,26 +526,26 @@ func Test_Repo_GetFileContent(t *testing.T) {
 	}{
 		{
 			name:     "case 0: get DCO file content",
-			path:     "DCO",
-			expected: "DCO",
+			path:     testFileDCO,
+			expected: testFileDCO,
 		},
 		{
 			name:     "case 1: get DCO file content on default branch (master)",
-			path:     "DCO",
-			expected: "DCO",
+			path:     testFileDCO,
+			expected: testFileDCO,
 			ref:      "master",
 		},
 		{
 			name:     "case 2: get DCO file content on branch-of-2.0.0 branch",
-			path:     "DCO",
-			expected: "DCO",
-			ref:      "origin/branch-of-2.0.0",
+			path:     testFileDCO,
+			expected: testFileDCO,
+			ref:      testOriginBranchOf200,
 		},
 		{
 			name:     "case 3: get DCO file content on v2.0.0 tag",
-			path:     "DCO",
-			expected: "DCO",
-			ref:      "v2.0.0",
+			path:     testFileDCO,
+			expected: testFileDCO,
+			ref:      testTagV200,
 		},
 		{
 			name:          "case 4: handle file not found error",
@@ -542,7 +554,7 @@ func Test_Repo_GetFileContent(t *testing.T) {
 		},
 		{
 			name:          "case 5: handle reference not found error",
-			path:          "DCO",
+			path:          testFileDCO,
 			ref:           "does-not-exist",
 			expectedError: &ReferenceNotFoundError{},
 		},
@@ -631,19 +643,19 @@ func Test_Repo_GetFolderContent(t *testing.T) {
 		{
 			name:     "case 0: get folder contents",
 			path:     ".",
-			expected: "DCO",
+			expected: testFileDCO,
 		},
 		{
 			name:     "case 1: get folder contents on a branch",
 			path:     ".",
-			expected: "DCO",
-			ref:      "origin/branch-of-2.0.0",
+			expected: testFileDCO,
+			ref:      testOriginBranchOf200,
 		},
 		{
 			name:     "case 2: get folder contents on a tag",
 			path:     ".",
-			expected: "DCO",
-			ref:      "v2.0.0",
+			expected: testFileDCO,
+			ref:      testTagV200,
 		},
 		{
 			name:          "case 3: folder not found error",
@@ -652,7 +664,7 @@ func Test_Repo_GetFolderContent(t *testing.T) {
 		},
 		{
 			name:          "case 4: handle reference not found error",
-			path:          "DCO",
+			path:          testFileDCO,
 			ref:           "does-not-exist",
 			expectedError: &ReferenceNotFoundError{},
 		},
@@ -663,7 +675,7 @@ func Test_Repo_GetFolderContent(t *testing.T) {
 
 	c := Config{
 		Dir: dir,
-		URL: "git@github.com:giantswarm/gitrepo-test.git",
+		URL: testGitHubURL,
 	}
 	repo, err := New(c)
 	if err != nil {
@@ -726,8 +738,8 @@ func Test_sanitizeBranchName(t *testing.T) {
 		{"feature_underscored", "feature-underscored"},
 		{"feat/sub/deep", "feat-sub-deep"},
 		{"already-clean-123", "already-clean-123"},
-		{"feat//double-slash", "feat-double-slash"},  // consecutive invalid chars → single hyphen
-		{"__leading", "-leading"},                     // leading invalid chars
+		{"feat//double-slash", "feat-double-slash"}, // consecutive invalid chars → single hyphen
+		{"__leading", "-leading"},                   // leading invalid chars
 	}
 
 	for _, tc := range cases {
@@ -748,7 +760,7 @@ func Test_incrementPatch(t *testing.T) {
 	}{
 		{"1.2.3", "1.2.4", false},
 		{"0.0.0", "0.0.1", false},
-		{"2.0.0", "2.0.1", false},
+		{testVersion200, "2.0.1", false},
 		{"1.9.9", "1.9.10", false},
 		{"bad", "", true},
 		{"1.2", "", true},
@@ -785,8 +797,8 @@ func Test_currentBranch_unknownFallback(t *testing.T) {
 	t.Setenv(branchEnvVarName, "")
 	t.Chdir(t.TempDir())
 	got := currentBranch()
-	if got != "unknown" {
-		t.Errorf("currentBranch() = %q, want %q (non-git dir should fall back)", got, "unknown")
+	if got != unknownBranch {
+		t.Errorf("currentBranch() = %q, want %q (non-git dir should fall back)", got, unknownBranch)
 	}
 }
 
@@ -852,7 +864,7 @@ func newTestRepo(t *testing.T) (*Repo, *git.Repository) {
 // skipped when computing the dev build base version; only stable vX.Y.Z tags count.
 func Test_Repo_ResolveVersion_rcAncestor(t *testing.T) {
 	ctx := context.Background()
-	t.Setenv(branchEnvVarName, "test-branch")
+	t.Setenv(branchEnvVarName, testBranchName)
 	nowFunc = func() time.Time { return time.Date(2026, 1, 27, 9, 49, 59, 0, time.UTC) }
 	defer func() { nowFunc = time.Now }()
 
@@ -886,7 +898,7 @@ func Test_Repo_ResolveVersion_rcAncestor(t *testing.T) {
 // ref may be considered.
 func Test_Repo_ResolveVersion_nonReachableTagIgnored(t *testing.T) {
 	ctx := context.Background()
-	t.Setenv(branchEnvVarName, "test-branch")
+	t.Setenv(branchEnvVarName, testBranchName)
 	nowFunc = func() time.Time { return time.Date(2026, 1, 27, 9, 49, 59, 0, time.UTC) }
 	defer func() { nowFunc = time.Now }()
 
@@ -914,7 +926,7 @@ func Test_Repo_ResolveVersion_nonReachableTagIgnored(t *testing.T) {
 		t.Fatal(err)
 	}
 	sideHash := testCreateCommit(t, gitRepo, "side.txt", base.Add(time.Hour))
-	if _, err := gitRepo.CreateTag("v2.0.0", sideHash, nil); err != nil {
+	if _, err := gitRepo.CreateTag(testTagV200, sideHash, nil); err != nil {
 		t.Fatal(err)
 	}
 
