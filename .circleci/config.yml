@@ -3,11 +3,8 @@ orbs:
   architect: giantswarm/architect@6.15.0
 
 workflows:
-  go-build:
+  build:
     jobs:
-      - architect/go-test:
-          name: go-test-gitrepo
-          # Needed to trigger job also on git tag.
-          filters:
-            tags:
-              only: /^v.*/
+      - architect/go-build:
+          binary: gitrepo-version
+          architectures: "linux/amd64,linux/arm64"
