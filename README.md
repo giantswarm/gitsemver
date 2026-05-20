@@ -25,7 +25,7 @@ For untagged commits the base `X.Y.Z` is the most recent **stable** ancestor tag
 ## CLI — `gitrepo-version`
 
 ```
-go install github.com/giantswarm/gitrepo/cmd/gitrepo-version@latest
+go install github.com/giantswarm/gitrepo@latest
 ```
 
 ```
