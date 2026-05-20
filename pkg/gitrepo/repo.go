@@ -281,7 +281,7 @@ func (r *Repo) HeadTag(ctx context.Context) (string, error) {
 //   - Stable tag vX.Y.Z on the commit → returns "X.Y.Z"
 //   - Pre-release tag vX.Y.Z-<pre> on the commit → returns "X.Y.Z-<pre>" (e.g. "1.2.3-rc.1")
 //   - Untagged commit → returns a semVer dev build:
-//     "X.Y.(Z+1)-dev.<branch>.<YYYYMMDD>.<HHMMSS>"
+//     "X.Y.(Z+1)-dev.<branch>.<YYYY-MM-DD>.<HH-MM-SS>"
 //     where X.Y.Z is the most recent stable (non-pre-release) ancestor tag reachable
 //     from the reference, or "0.0.0" when no stable ancestor exists. The branch name
 //     is resolved from GS_BRANCH_NAME env var, then the HEAD branch of the CWD git
@@ -429,8 +429,8 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 		pseudoVersion = fmt.Sprintf("%s-dev.%s.%s.%s",
 			base,
 			branch,
-			t.Format("20060102"),
-			t.Format("150405"),
+			t.Format("2006-01-02"),
+			t.Format("15-04-05"),
 		)
 	}
 

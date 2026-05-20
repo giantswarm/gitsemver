@@ -11,8 +11,8 @@ Library and CLI tool for computing a semVer-compatible version from a git refere
 |---|---|
 | HEAD carries stable tag `vX.Y.Z` | `X.Y.Z` |
 | HEAD carries pre-release tag `vX.Y.Z-rc.N` | `X.Y.Z-rc.N` |
-| HEAD is untagged, stable ancestor `vX.Y.Z` reachable | `X.Y.(Z+1)-dev.<branch>.<YYYYMMDD>.<HHMMSS>` |
-| HEAD is untagged, no stable ancestor reachable | `0.0.0-dev.<branch>.<YYYYMMDD>.<HHMMSS>` |
+| HEAD is untagged, stable ancestor `vX.Y.Z` reachable | `X.Y.(Z+1)-dev.<branch>.<YYYY-MM-DD>.<HH-MM-SS>` |
+| HEAD is untagged, no stable ancestor reachable | `0.0.0-dev.<branch>.<YYYY-MM-DD>.<HH-MM-SS>` |
 
 For untagged commits the base is the most recent **stable** ancestor tag reachable from the ref (RC and other pre-release tags are skipped). When no stable ancestor exists the version prefix is `0.0.0` with no patch increment.
 
@@ -40,7 +40,7 @@ Example — print the version for the current working tree:
 
 ```sh
 $ GS_BRANCH_NAME=my-feature gitrepo-version
-1.2.4-dev.my-feature.20260127.094959
+1.2.4-dev.my-feature.2026-01-27.09-49-59
 
 $ gitrepo-version --ref v1.2.3
 1.2.3
@@ -55,5 +55,5 @@ c := gitrepo.Config{
 }
 repo, err := gitrepo.New(c)
 version, err := repo.ResolveVersion(ctx, "HEAD")
-// e.g. "1.2.4-dev.my-feature.20260127.094959"
+// e.g. "1.2.4-dev.my-feature.2026-01-27.09-49-59"
 ```

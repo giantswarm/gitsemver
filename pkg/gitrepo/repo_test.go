@@ -298,49 +298,49 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 			inputHeadTarget: masterTarget,
 			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "2091354c7b8659f1846a876fbe2032fd1390d569",
-			expectedVersion: "0.0.0-dev.test-branch.20260127.094959",
+			expectedVersion: "0.0.0-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 5: untagged commit without tagged parent with detached head",
 			inputHeadTarget: "2091354c7b8659f1846a876fbe2032fd1390d569",
 			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "HEAD",
-			expectedVersion: "0.0.0-dev.test-branch.20260127.094959",
+			expectedVersion: "0.0.0-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 6: untagged commit with single tagged parent",
 			inputHeadTarget: masterTarget,
 			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "5ff7013b7a5f43d39b8da62361cfbfd4d3bf9a50",
-			expectedVersion: "1.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: "1.0.1-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 7: another untagged commit with single tagged parent",
 			inputHeadTarget: masterTarget,
 			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "0c57573cece531f840a167aa0ccc29b178b6de42",
-			expectedVersion: "2.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: "2.0.1-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 8: untagged commit with multiple tagged parents",
 			inputHeadTarget: masterTarget,
 			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "c3726de44a2bb1bd898fdbe5632a90841636fa82",
-			expectedVersion: "2.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: "2.0.1-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 9: untagged branch with single tagged parent",
 			inputHeadTarget: masterTarget,
 			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "origin/branch-of-2.0.0",
-			expectedVersion: "2.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: "2.0.1-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 10: untagged branch with multiple tagged parents",
 			inputHeadTarget: masterTarget,
 			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "origin/branch-of-1.0.0",
-			expectedVersion: "2.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: "2.0.1-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 11: unknown reference",
@@ -353,7 +353,7 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 			inputHeadTarget: masterTarget,
 			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "origin/complex-tree",
-			expectedVersion: "0.0.0-dev.test-branch.20260127.094959",
+			expectedVersion: "0.0.0-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 13: ...",
@@ -390,7 +390,7 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 				branchEnvVarName:    "test-branch",
 			},
 			inputRef:        "4707825fd7775c69fbd2f72a990e315b367b5409",
-			expectedVersion: "0.2.1-dev.test-branch.20260127.094959",
+			expectedVersion: "0.2.1-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 17: ...",
@@ -400,14 +400,14 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 				branchEnvVarName:    "test-branch",
 			},
 			inputRef:        "57aae3db71bcd176dd5a39eb8b487aae54930dcd",
-			expectedVersion: "0.0.0-dev.test-branch.20260127.094959",
+			expectedVersion: "0.0.0-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 18: ...",
 			inputHeadTarget: monorepoTarget,
 			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "ab61bc963b844551ffaf080f84d217e483323210",
-			expectedVersion: "2.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: "2.0.1-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 19: ...",
@@ -417,7 +417,7 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 				tagPrefixEnvVarName: "module-a",
 				branchEnvVarName:    "test-branch",
 			},
-			expectedVersion: "0.0.0-dev.test-branch.20260127.094959",
+			expectedVersion: "0.0.0-dev.test-branch.2026-01-27.09-49-59",
 		},
 	}
 
@@ -874,7 +874,7 @@ func Test_Repo_ResolveVersion_rcAncestor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	const want = "1.0.1-dev.test-branch.20260127.094959"
+	const want = "1.0.1-dev.test-branch.2026-01-27.09-49-59"
 	if version != want {
 		t.Errorf("ResolveVersion = %q, want %q — RC ancestor must be skipped, base must come from v1.0.0", version, want)
 	}
@@ -931,7 +931,7 @@ func Test_Repo_ResolveVersion_nonReachableTagIgnored(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	const want = "1.0.1-dev.test-branch.20260127.094959"
+	const want = "1.0.1-dev.test-branch.2026-01-27.09-49-59"
 	if version != want {
 		t.Errorf("ResolveVersion = %q, want %q — non-reachable v2.0.0 on side branch must be ignored", version, want)
 	}

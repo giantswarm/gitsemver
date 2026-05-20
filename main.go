@@ -4,7 +4,7 @@
 // For a pre-release tag (vX.Y.Z-rc.N) it prints X.Y.Z-rc.N.
 // For an untagged ref it prints a dev build:
 //
-//	X.Y.(Z+1)-dev.<branch>.<YYYYMMDD>.<HHMMSS>
+//	X.Y.(Z+1)-dev.<branch>.<YYYY-MM-DD>.<HH-MM-SS>
 //
 // where X.Y.Z is the most recent stable ancestor tag reachable from the ref,
 // or 0.0.0 when none exists.
