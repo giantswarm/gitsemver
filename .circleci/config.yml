@@ -8,3 +8,4 @@ workflows:
       - architect/go-build:
           binary: gitrepo-version
           architectures: "linux/amd64,linux/arm64"
+          context: architect
