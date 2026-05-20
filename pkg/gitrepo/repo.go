@@ -39,8 +39,6 @@ var branchSanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9-]+`)
 // nowFunc is the clock used for dev build timestamps; overridable in tests.
 var nowFunc = time.Now
 
-const unknownBranch = "unknown"
-
 // currentBranch returns the name of the branch to embed in dev build versions.
 // Priority: GS_BRANCH_NAME env var > HEAD branch of CWD git repo > "unknown".
 func currentBranch() string {
@@ -49,11 +47,11 @@ func currentBranch() string {
 	}
 	repo, err := git.PlainOpenWithOptions(".", &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
-		return unknownBranch
+		return "unknown"
 	}
 	head, err := repo.Head()
 	if err != nil {
-		return unknownBranch
+		return "unknown"
 	}
 	return head.Name().Short()
 }
