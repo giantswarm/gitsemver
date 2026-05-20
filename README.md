@@ -11,9 +11,10 @@ Library and CLI tool for computing a semVer-compatible version from a git refere
 |---|---|
 | HEAD carries stable tag `vX.Y.Z` | `X.Y.Z` |
 | HEAD carries pre-release tag `vX.Y.Z-rc.N` | `X.Y.Z-rc.N` |
-| HEAD is untagged | `X.Y.(Z+1)-dev.<branch>.<YYYYMMDD>.<HHMMSS>` |
+| HEAD is untagged, stable ancestor `vX.Y.Z` reachable | `X.Y.(Z+1)-dev.<branch>.<YYYYMMDD>.<HHMMSS>` |
+| HEAD is untagged, no stable ancestor reachable | `0.0.0-dev.<branch>.<YYYYMMDD>.<HHMMSS>` |
 
-For untagged commits the base `X.Y.Z` is the most recent **stable** ancestor tag reachable from the ref (RC and other pre-release tags are skipped). When no stable ancestor exists the base is `0.0.0`.
+For untagged commits the base is the most recent **stable** ancestor tag reachable from the ref (RC and other pre-release tags are skipped). When no stable ancestor exists the version prefix is `0.0.0` with no patch increment.
 
 ## Environment variables
 

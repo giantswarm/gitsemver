@@ -376,12 +376,7 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 			commit,
 		}
 
-		for {
-			if len(queue) == 0 {
-				lastStableVersion = "0.0.0"
-				break
-			}
-
+		for len(queue) > 0 {
 			// Pop the first element from the queue.
 			c := queue[0]
 			queue = queue[1:]
@@ -420,9 +415,14 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 			sort.Slice(queue, func(i, j int) bool { return queue[i].Committer.When.After(queue[j].Committer.When) })
 		}
 
-		base, err := incrementPatch(lastStableVersion)
-		if err != nil {
-			return "", err
+		var base string
+		if lastStableVersion == "" {
+			base = "0.0.0"
+		} else {
+			base, err = incrementPatch(lastStableVersion)
+			if err != nil {
+				return "", err
+			}
 		}
 		branch := sanitizeBranchName(currentBranch())
 		t := nowFunc().UTC()

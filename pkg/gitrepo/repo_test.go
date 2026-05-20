@@ -298,14 +298,14 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 			inputHeadTarget: masterTarget,
 			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "2091354c7b8659f1846a876fbe2032fd1390d569",
-			expectedVersion: "0.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: "0.0.0-dev.test-branch.20260127.094959",
 		},
 		{
 			name:            "case 5: untagged commit without tagged parent with detached head",
 			inputHeadTarget: "2091354c7b8659f1846a876fbe2032fd1390d569",
 			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "HEAD",
-			expectedVersion: "0.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: "0.0.0-dev.test-branch.20260127.094959",
 		},
 		{
 			name:            "case 6: untagged commit with single tagged parent",
@@ -353,7 +353,7 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 			inputHeadTarget: masterTarget,
 			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "origin/complex-tree",
-			expectedVersion: "0.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: "0.0.0-dev.test-branch.20260127.094959",
 		},
 		{
 			name:            "case 13: ...",
@@ -400,7 +400,7 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 				branchEnvVarName:    "test-branch",
 			},
 			inputRef:        "57aae3db71bcd176dd5a39eb8b487aae54930dcd",
-			expectedVersion: "0.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: "0.0.0-dev.test-branch.20260127.094959",
 		},
 		{
 			name:            "case 18: ...",
@@ -417,7 +417,7 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 				tagPrefixEnvVarName: "module-a",
 				branchEnvVarName:    "test-branch",
 			},
-			expectedVersion: "0.0.1-dev.test-branch.20260127.094959",
+			expectedVersion: "0.0.0-dev.test-branch.20260127.094959",
 		},
 	}
 
