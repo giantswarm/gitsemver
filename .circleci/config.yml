@@ -6,7 +6,7 @@ workflows:
   build:
     jobs:
       - architect/go-test:
-          name: go-test
+          name: go-test-gitrepo
           # Needed to trigger job also on git tag.
           filters:
             # Trigger job also on git tag.
@@ -17,4 +17,4 @@ workflows:
           architectures: "linux/amd64,linux/arm64"
           context: architect
           requires:
-            - go-test
+            - go-test-gitrepo
