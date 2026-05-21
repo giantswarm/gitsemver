@@ -25,6 +25,10 @@ func TestIsValidStable(t *testing.T) {
 		"abc",
 		"v",
 		"1.2.x",
+		// leading zeros in version components
+		"01.2.3",
+		"1.02.3",
+		"1.2.03",
 	}
 
 	for _, v := range valid {
@@ -60,6 +64,12 @@ func TestIsValidRC(t *testing.T) {
 		"1.2.3-rc.1.extra",
 		"1.2.3-dev.main.2026-01-27.09-49-59",
 		"abc",
+		// leading zeros
+		"01.2.3-rc.1",
+		"1.02.3-rc.1",
+		"1.2.03-rc.1",
+		"1.2.3-rc.01",
+		"1.2.3-rc.00",
 	}
 
 	for _, v := range valid {
@@ -109,6 +119,10 @@ func TestIsValidDev(t *testing.T) {
 		"1.2.3-dev.main.2026-01-27.09-49-59.extra",
 		// no v prefix required but "vv" is wrong
 		"vv1.2.3-dev.main.2026-01-27.09-49-59",
+		// leading zeros in version components
+		"01.2.3-dev.main.2026-01-27.09-49-59",
+		"1.02.3-dev.main.2026-01-27.09-49-59",
+		"1.2.03-dev.main.2026-01-27.09-49-59",
 	}
 
 	for _, v := range valid {

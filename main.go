@@ -38,14 +38,38 @@ import (
 	"github.com/giantswarm/gitrepo/pkg/gitrepo"
 )
 
+// errInvalidVersion is returned by runValidate when the version string does
+// not match the requested format.  It is not a usage error — the caller
+// should print "invalid" and exit 1.
+var errInvalidVersion = errors.New("invalid")
+
 func main() {
+	flag.Usage = func() {
+		_, _ = fmt.Fprintf(flag.CommandLine.Output(), `Usage:
+  gitrepo-version [flags]
+  gitrepo-version validate [--type dev|rc|stable|any] <version>
+
+Subcommands:
+  validate    Check whether a version string matches a known format.
+              Exits 0 and prints "valid" on success, 1 and "invalid" otherwise.
+
+Flags:
+`)
+		flag.PrintDefaults()
+	}
+
 	if len(os.Args) >= 2 && os.Args[1] == "validate" {
 		if err := runValidate(os.Args[2:]); err != nil {
-			if errors.Is(err, flag.ErrHelp) {
+			switch {
+			case errors.Is(err, flag.ErrHelp):
 				os.Exit(0)
+			case errors.Is(err, errInvalidVersion):
+				fmt.Println("invalid")
+				os.Exit(1)
+			default:
+				fmt.Fprintf(os.Stderr, "error: %v\n", err)
+				os.Exit(2)
 			}
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(2)
 		}
 		return
 	}
@@ -119,9 +143,7 @@ func runValidate(args []string) error {
 
 	if ok {
 		fmt.Println("valid")
-	} else {
-		fmt.Println("invalid")
-		os.Exit(1)
+		return nil
 	}
-	return nil
+	return errInvalidVersion
 }
