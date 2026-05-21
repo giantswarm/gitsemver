@@ -1,8 +1,8 @@
 package project
 
 var (
-	buildTimestamp = "n/a"
-	gitSHA         = "n/a"
+	buildTimestamp = "unknown"
+	gitSHA         = "unknown"
 	version        = "devel"
 )
 

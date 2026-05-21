@@ -70,13 +70,12 @@ Flags:
 		sub = os.Args[1]
 	}
 
-	if sub == "version" {
+	switch sub {
+	case "version":
 		fmt.Printf("version:   %s\ngit SHA:   %s\nbuilt:     %s\n",
 			project.Version(), project.GitSHA(), project.BuildTimestamp())
 		return
-	}
-
-	if sub == "validate" {
+	case "validate":
 		if err := runValidate(os.Args[2:]); err != nil {
 			switch {
 			case errors.Is(err, flag.ErrHelp):
