@@ -2,10 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+- feat: implement the tagging RFC
+  (https://github.com/giantswarm/rfc/tree/main/semver-based-automatic-upgrades)
+- feat: add tag validation API
 
 ## [0.3.5] - 2026-05-13
 
@@ -39,14 +43,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add support for git tag prefixes in version calculation logics. If the `GS_GIT_TAG_PREFIX` environment variable
-  is set to e.g. `mymodule-a` then tags like `mymodule-a/v1.2.3` will be looked for in the history instead of the
-  normal semantic versioning tags, when the env var is not set (default). New tags will be generated in the same
-  format and with the same logic tho. For the above example, a few commits ahead of that tag the new version in
-  a test build would be: `1.2.3-<GIT_HASH>`. When on the tag itself, it would be: `1.2.3`. When no tag found with
-  the given prefix, then it would be: `0.0.0-<GIT_HASH>`. This replicates the original behaviour, just the tag
-  looked up for reference changes in the behaviour. This enables creating sort of mono repositories where multiple
-  modules, libraries or smaller projects are stored in a single repo that needs to be versioned separately.
+- Add support for git tag prefixes in version calculation logics. If the `GS_GIT_TAG_PREFIX` environment
+  variable is set to e.g. `mymodule-a` then tags like `mymodule-a/v1.2.3` will be looked for in the history
+  instead of the normal semantic versioning tags, when the env var is not set (default). New tags will be
+  generated in the same format and with the same logic tho. For the above example, a few commits ahead of that
+  tag the new version in a test build would be: `1.2.3-<GIT_HASH>`. When on the tag itself, it would be:
+  `1.2.3`. When no tag found with the given prefix, then it would be: `0.0.0-<GIT_HASH>`. This replicates the
+  original behaviour, just the tag looked up for reference changes in the behaviour. This enables creating
+  sort of mono repositories where multiple modules, libraries or smaller projects are stored in a single repo
+  that needs to be versioned separately.
 
 ## [0.2.4] - 2024-06-03
 
@@ -58,9 +63,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Upgrade go-git and go-billy dependencies to their new location.
-  Moving from github.com/src-d to github.com/go-git.
-  v4 to v5 is a drop-in replacement, see https://github.com/go-git/go-git/releases/tag/v5.0.0
+- Upgrade go-git and go-billy dependencies to their new location. Moving from github.com/src-d to
+  github.com/go-git. v4 to v5 is a drop-in replacement, see
+  https://github.com/go-git/go-git/releases/tag/v5.0.0
 
 ## [0.2.2] - 2021-04-16
 
