@@ -65,13 +65,18 @@ Flags:
 		flag.PrintDefaults()
 	}
 
-	if len(os.Args) >= 2 && os.Args[1] == "version" {
+	sub := ""
+	if len(os.Args) >= 2 {
+		sub = os.Args[1]
+	}
+
+	if sub == "version" {
 		fmt.Printf("version:   %s\ngit SHA:   %s\nbuilt:     %s\n",
 			project.Version(), project.GitSHA(), project.BuildTimestamp())
 		return
 	}
 
-	if len(os.Args) >= 2 && os.Args[1] == "validate" {
+	if sub == "validate" {
 		if err := runValidate(os.Args[2:]); err != nil {
 			switch {
 			case errors.Is(err, flag.ErrHelp):

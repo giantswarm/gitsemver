@@ -1,4 +1,4 @@
 LDFLAGS = -w -linkmode 'auto' -extldflags '$(EXTLDFLAGS)' \
-  -X '$(shell go list -m)/pkg/project.buildTimestamp=${BUILDTIMESTAMP}' \
-  -X '$(shell go list -m)/pkg/project.gitSHA=${GITSHA1}' \
-  -X '$(shell go list -m)/pkg/project.version=${VERSION}'
+  -X '$(MODULE)/pkg/project.buildTimestamp=${BUILDTIMESTAMP}' \
+  -X '$(MODULE)/pkg/project.gitSHA=${GITSHA1}' \
+  -X '$(MODULE)/pkg/project.version=${VERSION}'
