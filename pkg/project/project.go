@@ -1,5 +1,7 @@
 package project
 
+import "strings"
+
 var (
 	buildTimestamp = "n/a"
 	gitSHA         = "n/a"
@@ -8,4 +10,10 @@ var (
 
 func BuildTimestamp() string { return buildTimestamp }
 func GitSHA() string         { return gitSHA }
-func Version() string        { return version }
+
+func Version() string {
+	if strings.Contains(version, "-dev.") {
+		return "devel"
+	}
+	return version
+}
