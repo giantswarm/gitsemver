@@ -1,9 +1,9 @@
-// gitrepo-version prints or validates semVer-compatible version strings for git refs.
+// gitsemver prints or validates semVer-compatible version strings for git refs.
 //
 // Usage:
 //
-//	gitrepo-version [flags]
-//	gitrepo-version validate [--type dev|rc|stable|any] <version>
+//	gitsemver [flags]
+//	gitsemver validate [--type dev|rc|stable|any] <version>
 //
 // Without a subcommand it resolves and prints the version for a git ref:
 //
@@ -35,7 +35,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/giantswarm/gitrepo/pkg/gitrepo"
+	"github.com/giantswarm/gitsemver/pkg/gitsemver"
 )
 
 // errInvalidVersion is returned by runValidate when the version string does
@@ -46,8 +46,8 @@ var errInvalidVersion = errors.New("invalid")
 func main() {
 	flag.Usage = func() {
 		_, _ = fmt.Fprintf(flag.CommandLine.Output(), `Usage:
-  gitrepo-version [flags]
-  gitrepo-version validate [--type dev|rc|stable|any] <version>
+  gitsemver [flags]
+  gitsemver validate [--type dev|rc|stable|any] <version>
 
 Subcommands:
   validate    Check whether a version string matches a known format.
@@ -87,18 +87,18 @@ Flags:
 func runResolve(dir, ref string) error {
 	ctx := context.Background()
 
-	topLevel, err := gitrepo.TopLevel(ctx, dir)
+	topLevel, err := gitsemver.TopLevel(ctx, dir)
 	if err != nil {
 		return fmt.Errorf("finding git root from %q: %w", dir, err)
 	}
 
-	repo, err := gitrepo.New(gitrepo.Config{Dir: topLevel})
+	repo, err := gitsemver.New(gitsemver.Config{Dir: topLevel})
 	if err != nil {
 		// New() fails when there is no origin remote and no URL was given.
 		// Fall back to a placeholder URL so we can still read local tags.
-		var invalidCfg *gitrepo.InvalidConfigError
+		var invalidCfg *gitsemver.InvalidConfigError
 		if errors.As(err, &invalidCfg) {
-			repo, err = gitrepo.New(gitrepo.Config{Dir: topLevel, URL: "_"})
+			repo, err = gitsemver.New(gitsemver.Config{Dir: topLevel, URL: "_"})
 		}
 		if err != nil {
 			return fmt.Errorf("opening repository at %q: %w", topLevel, err)
@@ -123,20 +123,20 @@ func runValidate(args []string) error {
 	}
 
 	if fs.NArg() != 1 {
-		return fmt.Errorf("validate requires exactly one version argument\nusage: gitrepo-version validate [--type dev|rc|stable|any] <version>")
+		return fmt.Errorf("validate requires exactly one version argument\nusage: gitsemver validate [--type dev|rc|stable|any] <version>")
 	}
 	version := fs.Arg(0)
 
 	var ok bool
 	switch *typFlag {
 	case "stable":
-		ok = gitrepo.IsValidStable(version)
+		ok = gitsemver.IsValidStable(version)
 	case "rc":
-		ok = gitrepo.IsValidRC(version)
+		ok = gitsemver.IsValidRC(version)
 	case "dev":
-		ok = gitrepo.IsValidDev(version)
+		ok = gitsemver.IsValidDev(version)
 	case "any":
-		ok = gitrepo.IsValid(version)
+		ok = gitsemver.IsValid(version)
 	default:
 		return fmt.Errorf("unknown --type %q: must be dev, rc, stable, or any", *typFlag)
 	}

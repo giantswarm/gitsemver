@@ -1,4 +1,4 @@
-package gitrepo
+package gitsemver
 
 import (
 	"bytes"
@@ -29,16 +29,16 @@ func Test_New_optionalURL(t *testing.T) {
 
 	ctx := context.Background()
 
-	dir := "/tmp/gitrepo-test-new-optionalurl"
+	dir := "/tmp/gitsemver-test-new-optionalurl"
 	defer func() { _ = os.RemoveAll(dir) }()
 
-	url := "git@github.com:giantswarm/gitrepo-test.git"
+	url := "git@github.com:giantswarm/gitsemver-test.git"
 
 	// Clone the repo first.
 	{
 		c := Config{
 			Dir: dir,
-			URL: "git@github.com:giantswarm/gitrepo-test.git",
+			URL: "git@github.com:giantswarm/gitsemver-test.git",
 		}
 
 		repo, err := New(c)
@@ -78,10 +78,10 @@ func Test_Repo_EnsureUpToDate_nosuchrepo(t *testing.T) {
 	ctx := context.Background()
 	var err error
 
-	dir := "/tmp/gitrepo-test-ensureuptodate-nosuchrepo"
+	dir := "/tmp/gitsemver-test-ensureuptodate-nosuchrepo"
 	defer func() { _ = os.RemoveAll(dir) }()
 
-	// Checkout the gitrepo-test repository.
+	// Checkout the gitsemver-test repository.
 	var repo *Repo
 	{
 		defer func() { _ = os.RemoveAll(dir) }()
@@ -115,17 +115,17 @@ func Test_Repo_Head(t *testing.T) {
 	ctx := context.Background()
 	var err error
 
-	dir := "/tmp/gitrepo-test-repo-headbranch"
+	dir := "/tmp/gitsemver-test-repo-headbranch"
 	defer func() { _ = os.RemoveAll(dir) }()
 
-	// Checkout the gitrepo-test repository.
+	// Checkout the gitsemver-test repository.
 	var repo *Repo
 	{
 		defer func() { _ = os.RemoveAll(dir) }()
 
 		c := Config{
 			Dir: dir,
-			URL: "git@github.com:giantswarm/gitrepo-test.git",
+			URL: "git@github.com:giantswarm/gitsemver-test.git",
 		}
 		repo, err = New(c)
 		if err != nil {
@@ -253,7 +253,7 @@ func Test_Repo_Head(t *testing.T) {
 
 // Test_Repo_ResolveVersion tests Repo.ResolveVersion method which resolve
 // a git reference and find the project version for it. Tested repository can
-// be found at https://github.com/giantswarm/gitrepo-test.
+// be found at https://github.com/giantswarm/gitsemver-test.
 func Test_Repo_ResolveVersion(t *testing.T) {
 	const masterTarget = "ref: refs/heads/master"
 	const monorepoTarget = "ref: refs/heads/monorepo"
@@ -421,12 +421,12 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 		},
 	}
 
-	dir := "/tmp/gitrepo-test-repo-resolveversion"
+	dir := "/tmp/gitsemver-test-repo-resolveversion"
 	defer func() { _ = os.RemoveAll(dir) }()
 
 	c := Config{
 		Dir: dir,
-		URL: "git@github.com:giantswarm/gitrepo-test.git",
+		URL: "git@github.com:giantswarm/gitsemver-test.git",
 	}
 	repo, err := New(c)
 	if err != nil {
@@ -496,7 +496,7 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 //
 // Tested repository can be found here:
 //
-//	https://github.com/giantswarm/gitrepo-test.
+//	https://github.com/giantswarm/gitsemver-test.
 //
 // It uses golden file as reference and when changes are intentional,
 // they can be updated by providing -update flag for go test:
@@ -552,12 +552,12 @@ func Test_Repo_GetFileContent(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Log(tc.name)
 
-			dir := fmt.Sprintf("/tmp/gitrepo-test-repo-getfilecontent-%d", i)
+			dir := fmt.Sprintf("/tmp/gitsemver-test-repo-getfilecontent-%d", i)
 			defer func() { _ = os.RemoveAll(dir) }()
 
 			c := Config{
 				Dir: dir,
-				URL: "https://github.com/giantswarm/gitrepo-test",
+				URL: "https://github.com/giantswarm/gitsemver-test",
 			}
 			repo, err := New(c)
 			if err != nil {
@@ -612,7 +612,7 @@ func Test_Repo_GetFileContent(t *testing.T) {
 //
 // Tested repository can be found here:
 //
-//	https://github.com/giantswarm/gitrepo-test.
+//	https://github.com/giantswarm/gitsemver-test.
 //
 // It uses golden file as reference and when changes are intentional,
 // they can be updated by providing -update flag for go test:
@@ -658,12 +658,12 @@ func Test_Repo_GetFolderContent(t *testing.T) {
 		},
 	}
 
-	dir := "/tmp/gitrepo-test-repo-getfoldercontent"
+	dir := "/tmp/gitsemver-test-repo-getfoldercontent"
 	defer func() { _ = os.RemoveAll(dir) }()
 
 	c := Config{
 		Dir: dir,
-		URL: "git@github.com:giantswarm/gitrepo-test.git",
+		URL: "git@github.com:giantswarm/gitsemver-test.git",
 	}
 	repo, err := New(c)
 	if err != nil {

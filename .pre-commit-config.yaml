@@ -40,4 +40,4 @@ repos:
           - --max-same-issues=0
           - --max-issues-per-linter=0
       - id: go-imports
-        args: [ -local, github.com/giantswarm/gitrepo ]
+        args: [ -local, github.com/giantswarm/gitsemver ]
