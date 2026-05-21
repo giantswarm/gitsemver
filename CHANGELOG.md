@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-21
+
 ### Changed
 
 - feat!: Repository and Go module renamed from `gitrepo` to `gitsemver`. CLI binary renamed from
@@ -113,7 +115,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - Functions signature for `EnsureUpToDate` and `ResolveVersion`.
 
-[Unreleased]: https://github.com/giantswarm/gitsemver/compare/v0.3.5...HEAD
+[Unreleased]: https://github.com/giantswarm/gitsemver/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/giantswarm/gitsemver/compare/v0.3.5...v1.0.0
 [0.3.5]: https://github.com/giantswarm/gitsemver/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/giantswarm/gitsemver/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/giantswarm/gitsemver/compare/v0.3.2...v0.3.3
