@@ -8,12 +8,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-errors/errors"
-	"github.com/go-git/go-billy/v5"
+	billy "github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/osfs"
-	"github.com/go-git/go-git/v5"
+	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/cache"
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -23,9 +25,55 @@ import (
 )
 
 var tagRegex = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+`)
+var stableTagRegex = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 
 var tagPrefixEnvVarName = "GS_GIT_TAG_PREFIX"
 var prefixedTagRegex = regexp.MustCompile(`^[a-zA-Z0-9-_]+/v[0-9]+\.[0-9]+\.[0-9]+`)
+
+var branchEnvVarName = "GS_BRANCH_NAME"
+
+// branchSanitizeRegex replaces one or more consecutive invalid semVer
+// pre-release characters with a single hyphen.
+var branchSanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9-]+`)
+
+// nowFunc is the clock used for dev build timestamps; overridable in tests.
+var nowFunc = time.Now
+
+const unknownBranch = "unknown"
+
+// currentBranch returns the name of the branch to embed in dev build versions.
+// Priority: GS_BRANCH_NAME env var > HEAD branch of CWD git repo > unknownBranch.
+func currentBranch() string {
+	if b := strings.TrimSpace(os.Getenv(branchEnvVarName)); b != "" {
+		return b
+	}
+	repo, err := git.PlainOpenWithOptions(".", &git.PlainOpenOptions{DetectDotGit: true})
+	if err != nil {
+		return unknownBranch
+	}
+	head, err := repo.Head()
+	if err != nil {
+		return unknownBranch
+	}
+	return head.Name().Short()
+}
+
+func sanitizeBranchName(branch string) string {
+	return branchSanitizeRegex.ReplaceAllString(branch, "-")
+}
+
+func incrementPatch(version string) (string, error) {
+	parts := strings.Split(version, ".")
+	if len(parts) != 3 {
+		return "", &ExecutionFailedError{message: fmt.Sprintf("invalid version %q: expected X.Y.Z", version)}
+	}
+	patch, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return "", &ExecutionFailedError{message: fmt.Sprintf("invalid patch in version %q: %v", version, err)}
+	}
+	parts[2] = strconv.Itoa(patch + 1)
+	return strings.Join(parts, "."), nil
+}
 
 type Config struct {
 	AuthBasicToken string
@@ -230,20 +278,21 @@ func (r *Repo) HeadTag(ctx context.Context) (string, error) {
 	return filteredTags[0], nil
 }
 
-// ResolveVersion resolves version of a reference. It may be a version in
-// format "X.Y.Z" if the reference is tagged with tag in format "vX.Y.Z" (note
-// that the "v" prefix is trimmed). Otherwise, it will be a pseudo-version in
-// format "X.Y.Z-SHA" where "X.Y.Z" part is the value taken from the most
-// recent parent commit tagged with "vX.Y.Z" or "0.0.0" if no such parent exist
-// and "SHA" part is the git SHA of the given reference.
+// ResolveVersion resolves the version for a git reference:
 //
-// If GS_TAG_PREFIX environment variable is set, it looks for tag with prefixed with '<env_var_value>/'.
-// The second half of the tag must still be semantic versioned, e.g. 'module-a/v1.2.3'. The prefix, the separator
-// and the v prefix is removed from the returned result, similar to the default behaviour, e.g. for the example
-// it will return '1.2.3'. Git hash postfix for references after the last found tag works here just the same.q
+//   - Stable tag vX.Y.Z on the commit → returns "X.Y.Z"
+//   - Pre-release tag vX.Y.Z-<pre> on the commit → returns "X.Y.Z-<pre>" (e.g. "1.2.3-rc.1")
+//   - Untagged commit → returns a semVer dev build:
+//     "X.Y.(Z+1)-dev.<branch>.<YYYY-MM-DD>.<HH-MM-SS>"
+//     where X.Y.Z is the most recent stable (non-pre-release) ancestor tag reachable
+//     from the reference, or "0.0.0" when no stable ancestor exists. The branch name
+//     is resolved from GS_BRANCH_NAME env var, then the HEAD branch of the CWD git
+//     repo, then "unknown". Non-reachable tags are never used as the base.
 //
-// It returns error handled by IsReferenceNotFound if the HEAD ref is not
-// tagged.
+// If GS_GIT_TAG_PREFIX is set, only tags prefixed with "<value>/" are considered,
+// e.g. "module-a/v1.2.3". The prefix, separator, and "v" are stripped from the result.
+//
+// It returns an error handled by IsReferenceNotFound if the reference cannot be resolved.
 func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 	repo, err := git.Open(r.storage, r.worktree)
 	if err != nil {
@@ -253,6 +302,7 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 	tagPrefix := os.Getenv(tagPrefixEnvVarName)
 
 	versionsByHash := map[string]string{}
+	stableVersionsByHash := map[string]string{}
 	{
 
 		tagsByHash, err := r.tags(repo)
@@ -266,12 +316,21 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 				if tagPrefix != "" {
 					if prefixedTagRegex.MatchString(t) && strings.HasPrefix(t, tagPrefix+"/") {
 						versionTags = append(versionTags, t)
-						versionsByHash[hash] = strings.TrimPrefix(strings.TrimPrefix(t, tagPrefix+"/"), "v")
+						version := strings.TrimPrefix(strings.TrimPrefix(t, tagPrefix+"/"), "v")
+						versionsByHash[hash] = version
+						tagWithoutPrefix := strings.TrimPrefix(t, tagPrefix+"/")
+						if stableTagRegex.MatchString(tagWithoutPrefix) {
+							stableVersionsByHash[hash] = version
+						}
 					}
 				} else {
 					if tagRegex.MatchString(t) {
 						versionTags = append(versionTags, t)
-						versionsByHash[hash] = strings.TrimPrefix(t, "v")
+						version := strings.TrimPrefix(t, "v")
+						versionsByHash[hash] = version
+						if stableTagRegex.MatchString(t) {
+							stableVersionsByHash[hash] = version
+						}
 					}
 				}
 
@@ -306,31 +365,30 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 		}
 	}
 
-	// Otherwise find the first tagged parent and return it's tag glued
-	// with the SHA.
+	// Otherwise walk ancestors to find the most recent stable tagged parent,
+	// then return a semVer-compatible dev build version.
+	// The queue only ever holds commits reachable from `commit` (parents of parents,
+	// etc.), so stableVersionsByHash is only consulted for actual ancestors — tags
+	// on unrelated branches are never returned.
 	var pseudoVersion string
 	{
-		var lastVersion string
+		var lastStableVersion string
 
 		queue := []*object.Commit{
 			commit,
 		}
 
-		for {
-			if len(queue) == 0 {
-				lastVersion = "0.0.0"
-				break
-			}
-
+		for len(queue) > 0 {
 			// Pop the first element from the queue.
 			c := queue[0]
 			queue = queue[1:]
 
-			// Check if this commit is tagged. If so the most
-			// recent tag is found and loop should be finished.
-			v, ok := versionsByHash[c.Hash.String()]
+			// Check if this commit has a stable tag. RC and other pre-release
+			// tags are intentionally skipped so the dev build base is always
+			// derived from the last stable release.
+			v, ok := stableVersionsByHash[c.Hash.String()]
 			if ok {
-				lastVersion = v
+				lastStableVersion = v
 				break
 			}
 
@@ -359,7 +417,23 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 			sort.Slice(queue, func(i, j int) bool { return queue[i].Committer.When.After(queue[j].Committer.When) })
 		}
 
-		pseudoVersion = lastVersion + "-" + commit.Hash.String()
+		var base string
+		if lastStableVersion == "" {
+			base = "0.0.0"
+		} else {
+			base, err = incrementPatch(lastStableVersion)
+			if err != nil {
+				return "", err
+			}
+		}
+		branch := sanitizeBranchName(currentBranch())
+		t := nowFunc().UTC()
+		pseudoVersion = fmt.Sprintf("%s-dev.%s.%s.%s",
+			base,
+			branch,
+			t.Format("2006-01-02"),
+			t.Format("15-04-05"),
+		)
 	}
 
 	return pseudoVersion, nil
