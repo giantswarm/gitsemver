@@ -14,8 +14,9 @@ import (
 
 	"github.com/go-errors/errors"
 
-	"github.com/go-git/go-git/v5"
+	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -257,6 +258,9 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 	const masterTarget = "ref: refs/heads/master"
 	const monorepoTarget = "ref: refs/heads/monorepo"
 
+	nowFunc = func() time.Time { return time.Date(2026, 1, 27, 9, 49, 59, 0, time.UTC) }
+	defer func() { nowFunc = time.Now }()
+
 	testCases := []struct {
 		name            string
 		inputHeadTarget string
@@ -292,44 +296,51 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 		{
 			name:            "case 4: untagged commit without tagged parent",
 			inputHeadTarget: masterTarget,
+			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "2091354c7b8659f1846a876fbe2032fd1390d569",
-			expectedVersion: "0.0.0-2091354c7b8659f1846a876fbe2032fd1390d569",
+			expectedVersion: "0.0.0-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 5: untagged commit without tagged parent with detached head",
 			inputHeadTarget: "2091354c7b8659f1846a876fbe2032fd1390d569",
+			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "HEAD",
-			expectedVersion: "0.0.0-2091354c7b8659f1846a876fbe2032fd1390d569",
+			expectedVersion: "0.0.0-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 6: untagged commit with single tagged parent",
 			inputHeadTarget: masterTarget,
+			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "5ff7013b7a5f43d39b8da62361cfbfd4d3bf9a50",
-			expectedVersion: "1.0.0-5ff7013b7a5f43d39b8da62361cfbfd4d3bf9a50",
+			expectedVersion: "1.0.1-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 7: another untagged commit with single tagged parent",
 			inputHeadTarget: masterTarget,
+			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "0c57573cece531f840a167aa0ccc29b178b6de42",
-			expectedVersion: "2.0.0-0c57573cece531f840a167aa0ccc29b178b6de42",
+			expectedVersion: "2.0.1-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 8: untagged commit with multiple tagged parents",
 			inputHeadTarget: masterTarget,
+			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "c3726de44a2bb1bd898fdbe5632a90841636fa82",
-			expectedVersion: "2.0.0-c3726de44a2bb1bd898fdbe5632a90841636fa82",
+			expectedVersion: "2.0.1-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 9: untagged branch with single tagged parent",
 			inputHeadTarget: masterTarget,
+			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "origin/branch-of-2.0.0",
-			expectedVersion: "2.0.0-3901da4b6b4cf68e3d11a10f60916107828fa9a7",
+			expectedVersion: "2.0.1-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 10: untagged branch with multiple tagged parents",
 			inputHeadTarget: masterTarget,
+			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "origin/branch-of-1.0.0",
-			expectedVersion: "2.0.0-c3726de44a2bb1bd898fdbe5632a90841636fa82",
+			expectedVersion: "2.0.1-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 11: unknown reference",
@@ -340,8 +351,9 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 		{
 			name:            "case 12: resolving complex tree with multiple common parents and long history",
 			inputHeadTarget: masterTarget,
+			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "origin/complex-tree",
-			expectedVersion: "0.0.0-a42e026e60b4c191ffb29430f439ad4b3aced71b",
+			expectedVersion: "0.0.0-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 13: ...",
@@ -375,24 +387,27 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 			inputHeadTarget: monorepoTarget,
 			environment: map[string]string{
 				tagPrefixEnvVarName: "module-b",
+				branchEnvVarName:    "test-branch",
 			},
 			inputRef:        "4707825fd7775c69fbd2f72a990e315b367b5409",
-			expectedVersion: "0.2.0-4707825fd7775c69fbd2f72a990e315b367b5409",
+			expectedVersion: "0.2.1-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 17: ...",
 			inputHeadTarget: monorepoTarget,
 			environment: map[string]string{
 				tagPrefixEnvVarName: "module-not-exist",
+				branchEnvVarName:    "test-branch",
 			},
 			inputRef:        "57aae3db71bcd176dd5a39eb8b487aae54930dcd",
-			expectedVersion: "0.0.0-57aae3db71bcd176dd5a39eb8b487aae54930dcd",
+			expectedVersion: "0.0.0-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 18: ...",
 			inputHeadTarget: monorepoTarget,
+			environment:     map[string]string{branchEnvVarName: "test-branch"},
 			inputRef:        "ab61bc963b844551ffaf080f84d217e483323210",
-			expectedVersion: "2.0.0-ab61bc963b844551ffaf080f84d217e483323210",
+			expectedVersion: "2.0.1-dev.test-branch.2026-01-27.09-49-59",
 		},
 		{
 			name:            "case 19: ...",
@@ -400,8 +415,9 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 			inputRef:        "35d336b84623963eb4a9ea554b4ebf3f93a5d63d",
 			environment: map[string]string{
 				tagPrefixEnvVarName: "module-a",
+				branchEnvVarName:    "test-branch",
 			},
-			expectedVersion: "0.0.0-35d336b84623963eb4a9ea554b4ebf3f93a5d63d",
+			expectedVersion: "0.0.0-dev.test-branch.2026-01-27.09-49-59",
 		},
 	}
 
@@ -695,4 +711,228 @@ func containsFile(files []os.FileInfo, fileName string) bool {
 	}
 
 	return false
+}
+
+func Test_sanitizeBranchName(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		input    string
+		expected string
+	}{
+		{"main", "main"},
+		{"my-feature", "my-feature"},
+		{"feature/my-thing", "feature-my-thing"},
+		{"feature_underscored", "feature-underscored"},
+		{"feat/sub/deep", "feat-sub-deep"},
+		{"already-clean-123", "already-clean-123"},
+		{"feat//double-slash", "feat-double-slash"}, // consecutive invalid chars → single hyphen
+		{"__leading", "-leading"},                   // leading invalid chars
+	}
+
+	for _, tc := range cases {
+		got := sanitizeBranchName(tc.input)
+		if got != tc.expected {
+			t.Errorf("sanitizeBranchName(%q) = %q, want %q", tc.input, got, tc.expected)
+		}
+	}
+}
+
+func Test_incrementPatch(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		input    string
+		expected string
+		wantErr  bool
+	}{
+		{"1.2.3", "1.2.4", false},
+		{"0.0.0", "0.0.1", false},
+		{"2.0.0", "2.0.1", false},
+		{"1.9.9", "1.9.10", false},
+		{"bad", "", true},
+		{"1.2", "", true},
+		{"1.2.x", "", true},
+	}
+
+	for _, tc := range cases {
+		got, err := incrementPatch(tc.input)
+		if tc.wantErr {
+			if err == nil {
+				t.Errorf("incrementPatch(%q): expected error, got %q", tc.input, got)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("incrementPatch(%q): unexpected error: %v", tc.input, err)
+			continue
+		}
+		if got != tc.expected {
+			t.Errorf("incrementPatch(%q) = %q, want %q", tc.input, got, tc.expected)
+		}
+	}
+}
+
+func Test_currentBranch_envOverride(t *testing.T) {
+	t.Setenv(branchEnvVarName, "my-override-branch")
+	got := currentBranch()
+	if got != "my-override-branch" {
+		t.Errorf("currentBranch() = %q, want %q", got, "my-override-branch")
+	}
+}
+
+func Test_currentBranch_unknownFallback(t *testing.T) {
+	t.Setenv(branchEnvVarName, "")
+	t.Chdir(t.TempDir())
+	got := currentBranch()
+	if got != "unknown" {
+		t.Errorf("currentBranch() = %q, want %q (non-git dir should fall back)", got, "unknown")
+	}
+}
+
+func Test_currentBranch_detachedHead(t *testing.T) {
+	dir := t.TempDir()
+	gitRepo, err := git.PlainInit(dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := testCreateCommit(t, gitRepo, "init.txt", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+	w, _ := gitRepo.Worktree()
+	if err := w.Checkout(&git.CheckoutOptions{Hash: hash}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(branchEnvVarName, "")
+	t.Chdir(dir)
+	got := currentBranch()
+	if got != "HEAD" {
+		t.Errorf("currentBranch() = %q, want %q (detached HEAD should return \"HEAD\")", got, "HEAD")
+	}
+}
+
+// testCreateCommit adds a single file and creates a commit in gitRepo.
+func testCreateCommit(t *testing.T, gitRepo *git.Repository, filename string, when time.Time) plumbing.Hash {
+	t.Helper()
+	w, err := gitRepo.Worktree()
+	if err != nil {
+		t.Fatalf("Worktree: %v", err)
+	}
+	f, err := w.Filesystem.Create(filename)
+	if err != nil {
+		t.Fatalf("Create %s: %v", filename, err)
+	}
+	_, _ = fmt.Fprint(f, filename)
+	_ = f.Close()
+	if _, err = w.Add(filename); err != nil {
+		t.Fatalf("Add %s: %v", filename, err)
+	}
+	sig := &object.Signature{Name: "test", Email: "t@t.com", When: when}
+	hash, err := w.Commit(filename, &git.CommitOptions{Author: sig, Committer: sig})
+	if err != nil {
+		t.Fatalf("Commit %s: %v", filename, err)
+	}
+	return hash
+}
+
+// newTestRepo creates a fresh on-disk git repo in t.TempDir and wraps it in a Repo.
+func newTestRepo(t *testing.T) (*Repo, *git.Repository) {
+	t.Helper()
+	dir := t.TempDir()
+	gitRepo, err := git.PlainInit(dir, false)
+	if err != nil {
+		t.Fatalf("PlainInit: %v", err)
+	}
+	repo, err := New(Config{Dir: dir, URL: "https://example.com/test.git"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	return repo, gitRepo
+}
+
+// Test_Repo_ResolveVersion_rcAncestor verifies that RC tags in the ancestry are
+// skipped when computing the dev build base version; only stable vX.Y.Z tags count.
+func Test_Repo_ResolveVersion_rcAncestor(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv(branchEnvVarName, "test-branch")
+	nowFunc = func() time.Time { return time.Date(2026, 1, 27, 9, 49, 59, 0, time.UTC) }
+	defer func() { nowFunc = time.Now }()
+
+	repo, gitRepo := newTestRepo(t)
+
+	base := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	stableHash := testCreateCommit(t, gitRepo, "stable.txt", base)
+	if _, err := gitRepo.CreateTag("v1.0.0", stableHash, nil); err != nil {
+		t.Fatal(err)
+	}
+	rcHash := testCreateCommit(t, gitRepo, "rc.txt", base.Add(time.Hour))
+	if _, err := gitRepo.CreateTag("v1.1.0-rc.1", rcHash, nil); err != nil {
+		t.Fatal(err)
+	}
+	headHash := testCreateCommit(t, gitRepo, "dev.txt", base.Add(2*time.Hour))
+
+	version, err := repo.ResolveVersion(ctx, headHash.String())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	const want = "1.0.1-dev.test-branch.2026-01-27.09-49-59"
+	if version != want {
+		t.Errorf("ResolveVersion = %q, want %q — RC ancestor must be skipped, base must come from v1.0.0", version, want)
+	}
+}
+
+// Test_Repo_ResolveVersion_nonReachableTagIgnored verifies that a higher-version
+// stable tag present in the repo but on a non-ancestor branch is never used as
+// the dev build base. Only tags reachable (i.e. ancestor commits) from the given
+// ref may be considered.
+func Test_Repo_ResolveVersion_nonReachableTagIgnored(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv(branchEnvVarName, "test-branch")
+	nowFunc = func() time.Time { return time.Date(2026, 1, 27, 9, 49, 59, 0, time.UTC) }
+	defer func() { nowFunc = time.Now }()
+
+	repo, gitRepo := newTestRepo(t)
+
+	base := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Initial commit on the default (master) branch, tagged v1.0.0.
+	stableHash := testCreateCommit(t, gitRepo, "stable.txt", base)
+	if _, err := gitRepo.CreateTag("v1.0.0", stableHash, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a side branch from the initial commit and tag it v2.0.0.
+	// This commit will NOT be reachable from our eventual HEAD on master.
+	w, err := gitRepo.Worktree()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Checkout(&git.CheckoutOptions{
+		Hash:   stableHash,
+		Branch: plumbing.NewBranchReferenceName("side"),
+		Create: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sideHash := testCreateCommit(t, gitRepo, "side.txt", base.Add(time.Hour))
+	if _, err := gitRepo.CreateTag("v2.0.0", sideHash, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Return to master and create the HEAD commit (parent: stableHash).
+	if err := w.Checkout(&git.CheckoutOptions{
+		Branch: plumbing.NewBranchReferenceName("master"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	headHash := testCreateCommit(t, gitRepo, "head.txt", base.Add(2*time.Hour))
+
+	// headHash ancestry: stableHash (v1.0.0). sideHash (v2.0.0) is not reachable.
+	version, err := repo.ResolveVersion(ctx, headHash.String())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	const want = "1.0.1-dev.test-branch.2026-01-27.09-49-59"
+	if version != want {
+		t.Errorf("ResolveVersion = %q, want %q — non-reachable v2.0.0 on side branch must be ignored", version, want)
+	}
 }
