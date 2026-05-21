@@ -6,15 +6,15 @@ workflows:
   build:
     jobs:
       - architect/go-test:
-          name: go-test-gitrepo
+          name: go-test-gitsemver
           # Needed to trigger job also on git tag.
           filters:
             # Trigger job also on git tag.
             tags:
               only: /^v.*/
       - architect/go-build:
-          binary: gitrepo-version
+          binary: gitsemver
           architectures: "linux/amd64,linux/arm64"
           context: architect
           requires:
-            - go-test-gitrepo
+            - go-test-gitsemver

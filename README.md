@@ -1,7 +1,7 @@
-[![Go Reference](https://pkg.go.dev/badge/github.com/giantswarm/gitrepo.svg)](https://pkg.go.dev/github.com/giantswarm/gitrepo)
-[![CircleCI](https://dl.circleci.com/status-badge/img/gh/giantswarm/gitrepo/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/giantswarm/gitrepo/tree/main)
+[![Go Reference](https://pkg.go.dev/badge/github.com/giantswarm/gitsemver.svg)](https://pkg.go.dev/github.com/giantswarm/gitsemver)
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/giantswarm/gitsemver/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/giantswarm/gitsemver/tree/main)
 
-# gitrepo
+# gitsemver
 
 Library and CLI tool for computing a semVer-compatible version from a git reference.
 
@@ -23,14 +23,14 @@ For untagged commits the base is the most recent **stable** ancestor tag reachab
 | `GS_BRANCH_NAME` | Override the branch name embedded in dev build versions. Defaults to the HEAD branch of the repo, then `"unknown"`. |
 | `GS_GIT_TAG_PREFIX` | Monorepo support: only consider tags prefixed with `"<value>/"`, e.g. `module-a/v1.2.3`. |
 
-## CLI — `gitrepo-version`
+## CLI — `gitsemver`
 
 ```
-go install github.com/giantswarm/gitrepo@latest
+go install github.com/giantswarm/gitsemver@latest
 ```
 
 ```
-Usage: gitrepo-version [flags]
+Usage: gitsemver [flags]
 
   -dir string   path inside the git repository (default ".", resolved to repo root)
   -ref string   git ref to resolve: branch name, tag, or commit SHA (default "HEAD")
@@ -39,21 +39,21 @@ Usage: gitrepo-version [flags]
 Example — print the version for the current working tree:
 
 ```sh
-$ GS_BRANCH_NAME=my-feature gitrepo-version
+$ GS_BRANCH_NAME=my-feature gitsemver
 1.2.4-dev.my-feature.2026-01-27.09-49-59
 
-$ gitrepo-version --ref v1.2.3
+$ gitsemver --ref v1.2.3
 1.2.3
 ```
 
 ## Go library
 
 ```go
-c := gitrepo.Config{
+c := gitsemver.Config{
     Dir: "/path/to/some-repo",
     URL: "git@github.com:giantswarm/some-repo.git",
 }
-repo, err := gitrepo.New(c)
+repo, err := gitsemver.New(c)
 version, err := repo.ResolveVersion(ctx, "HEAD")
 // e.g. "1.2.4-dev.my-feature.2026-01-27.09-49-59"
 ```

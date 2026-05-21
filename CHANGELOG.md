@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- feat!: Repository and Go module renamed from `gitrepo` to `gitsemver`. CLI binary renamed from
+  `gitrepo-version` to `gitsemver`. Import path changed to `github.com/giantswarm/gitsemver/pkg/gitsemver`.
 - feat: implement the tagging RFC
   (https://github.com/giantswarm/rfc/tree/main/semver-based-automatic-upgrades)
 - feat: add tag validation API
@@ -109,18 +113,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - Functions signature for `EnsureUpToDate` and `ResolveVersion`.
 
-[Unreleased]: https://github.com/giantswarm/gitrepo/compare/v0.3.5...HEAD
-[0.3.5]: https://github.com/giantswarm/gitrepo/compare/v0.3.4...v0.3.5
-[0.3.4]: https://github.com/giantswarm/gitrepo/compare/v0.3.3...v0.3.4
-[0.3.3]: https://github.com/giantswarm/gitrepo/compare/v0.3.2...v0.3.3
-[0.3.2]: https://github.com/giantswarm/gitrepo/compare/v0.3.1...v0.3.2
-[0.3.1]: https://github.com/giantswarm/gitrepo/compare/v0.3.0...v0.3.1
-[0.3.0]: https://github.com/giantswarm/gitrepo/compare/v0.2.4...v0.3.0
-[0.2.4]: https://github.com/giantswarm/gitrepo/compare/v0.2.3...v0.2.4
-[0.2.3]: https://github.com/giantswarm/gitrepo/compare/v0.2.2...v0.2.3
-[0.2.2]: https://github.com/giantswarm/gitrepo/compare/v0.2.1...v0.2.2
-[0.2.1]: https://github.com/giantswarm/gitrepo/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/giantswarm/gitrepo/compare/v0.1.2...v0.2.0
-[0.1.2]: https://github.com/giantswarm/gitrepo/compare/v0.1.1...v0.1.2
+[Unreleased]: https://github.com/giantswarm/gitsemver/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/giantswarm/gitsemver/compare/v0.3.4...v0.3.5
+[0.3.4]: https://github.com/giantswarm/gitsemver/compare/v0.3.3...v0.3.4
+[0.3.3]: https://github.com/giantswarm/gitsemver/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/giantswarm/gitsemver/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/giantswarm/gitsemver/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/giantswarm/gitsemver/compare/v0.2.4...v0.3.0
+[0.2.4]: https://github.com/giantswarm/gitsemver/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/giantswarm/gitsemver/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/giantswarm/gitsemver/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/giantswarm/gitsemver/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/giantswarm/gitsemver/compare/v0.1.2...v0.2.0
+[0.1.2]: https://github.com/giantswarm/gitsemver/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/giantswarm/architect-orb/releases/tag/v0.1.1
 [0.1.0]: https://github.com/giantswarm/architect-orb/releases/tag/v0.1.0

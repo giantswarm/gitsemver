@@ -1,4 +1,4 @@
-module github.com/giantswarm/gitrepo
+module github.com/giantswarm/gitsemver
 
 go 1.25.0
 
