@@ -4,6 +4,7 @@
 //
 //	gitsemver [flags]
 //	gitsemver validate [--type dev|rc|stable|any] <version>
+//	gitsemver version
 //
 // Without a subcommand it resolves and prints the version for a git ref:
 //
@@ -19,6 +20,9 @@
 // The "validate" subcommand checks whether a version string matches the
 // expected format.  It exits 0 and prints "valid" on success, exits 1 and
 // prints "invalid" otherwise.
+//
+// The "version" subcommand prints the build version (git tag), git SHA, and
+// build timestamp embedded at link time.
 //
 // Environment variables:
 //
@@ -36,6 +40,7 @@ import (
 	"os"
 
 	"github.com/giantswarm/gitsemver/pkg/gitsemver"
+	"github.com/giantswarm/gitsemver/pkg/project"
 )
 
 // errInvalidVersion is returned by runValidate when the version string does
@@ -48,14 +53,22 @@ func main() {
 		_, _ = fmt.Fprintf(flag.CommandLine.Output(), `Usage:
   gitsemver [flags]
   gitsemver validate [--type dev|rc|stable|any] <version>
+  gitsemver version
 
 Subcommands:
   validate    Check whether a version string matches a known format.
               Exits 0 and prints "valid" on success, 1 and "invalid" otherwise.
+  version     Print the build version, git SHA, and build timestamp.
 
 Flags:
 `)
 		flag.PrintDefaults()
+	}
+
+	if len(os.Args) >= 2 && os.Args[1] == "version" {
+		fmt.Printf("version:   %s\ngit SHA:   %s\nbuilt:     %s\n",
+			project.Version(), project.GitSHA(), project.BuildTimestamp())
+		return
 	}
 
 	if len(os.Args) >= 2 && os.Args[1] == "validate" {
