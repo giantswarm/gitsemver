@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `gitsemver version` subcommand that prints the build version, git SHA, and build timestamp. Version defaults to `devel` between releases and is updated to the release tag in source before each release. Git SHA and build timestamp are injected at link time via ldflags.
+
 ## [1.0.0] - 2026-05-21
 
 ### Changed
