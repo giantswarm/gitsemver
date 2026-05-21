@@ -7,7 +7,7 @@ toolchain go1.26.3
 require (
 	github.com/go-errors/errors v1.5.1
 	github.com/go-git/go-billy/v5 v5.9.0
-	github.com/go-git/go-git/v5 v5.19.0
+	github.com/go-git/go-git/v5 v5.19.1
 	github.com/google/go-cmp v0.7.0
 )
 
