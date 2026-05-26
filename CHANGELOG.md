@@ -7,6 +7,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `gitsemver next <bump-type> [--last-tag <tag>]` subcommand that computes the next semver
+  release tag from the highest-semver reachable ancestor tag (or an explicit `--last-tag` value).
+  Bump types from a stable tag: `patch`, `minor`, `major`, `patch-rc`, `minor-rc`, `major-rc`.
+  Bump types from an RC tag: `rc` (increment counter), `rc-release` (finalize to stable).
+  `--last-tag` bypasses git entirely, making the command usable outside a repository.
+
+### Fixed
+
+- Multiple version tags on the same commit now produce an error instead of silently
+  returning a non-deterministic result (`buildVersionMaps` guard was previously unreachable).
+
 ## [1.0.1] - 2026-05-25
 
 ### Added
