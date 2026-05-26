@@ -9,11 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [1.0.2] - 2026-05-26
 
+### Fixed
+
+- calling `gitsemver` now correctly returns usage info; to get a version, the `version` subcommand must be
+  used: `gitsemver version`
+
 ## [1.0.1] - 2026-05-25
 
 ### Added
 
-- `gitsemver version` subcommand that prints the build version, git SHA, and build timestamp. Version defaults to `devel` between releases and is updated to the release tag in source before each release. Git SHA and build timestamp are injected at link time via ldflags.
+- `gitsemver version` subcommand that prints the build version, git SHA, and build timestamp. Version defaults
+  to `devel` between releases and is updated to the release tag in source before each release. Git SHA and
+  build timestamp are injected at link time via ldflags.
 
 ## [1.0.0] - 2026-05-21
 
