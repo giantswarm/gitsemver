@@ -2,11 +2,10 @@
 //
 // Usage:
 //
-//	gitsemver [flags]
+//	gitsemver version [--dir <path>] [--ref <ref>]
 //	gitsemver validate [--type dev|rc|stable|any] <version>
-//	gitsemver version
 //
-// Without a subcommand it resolves and prints the version for a git ref:
+// The "version" subcommand resolves and prints the version for a git ref:
 //
 //	For a ref that carries a stable tag (vX.Y.Z) it prints X.Y.Z.
 //	For a pre-release tag (vX.Y.Z-rc.N) it prints X.Y.Z-rc.N.
@@ -20,9 +19,6 @@
 // The "validate" subcommand checks whether a version string matches the
 // expected format.  It exits 0 and prints "valid" on success, exits 1 and
 // prints "invalid" otherwise.
-//
-// The "version" subcommand prints the build version (git tag), git SHA, and
-// build timestamp embedded at link time.
 //
 // Environment variables:
 //
@@ -40,7 +36,6 @@ import (
 	"os"
 
 	"github.com/giantswarm/gitsemver/pkg/gitsemver"
-	"github.com/giantswarm/gitsemver/pkg/project"
 )
 
 // errInvalidVersion is returned by runValidate when the version string does
@@ -49,20 +44,16 @@ import (
 var errInvalidVersion = errors.New("invalid")
 
 func main() {
-	flag.Usage = func() {
-		_, _ = fmt.Fprintf(flag.CommandLine.Output(), `Usage:
-  gitsemver [flags]
+	usage := func() {
+		_, _ = fmt.Fprintf(os.Stderr, `Usage:
+  gitsemver version [--dir <path>] [--ref <ref>]
   gitsemver validate [--type dev|rc|stable|any] <version>
-  gitsemver version
 
 Subcommands:
+  version     Resolve and print the semver version for a git ref.
   validate    Check whether a version string matches a known format.
               Exits 0 and prints "valid" on success, 1 and "invalid" otherwise.
-  version     Print the build version, git SHA, and build timestamp.
-
-Flags:
 `)
-		flag.PrintDefaults()
 	}
 
 	sub := ""
@@ -72,9 +63,20 @@ Flags:
 
 	switch sub {
 	case "version":
-		fmt.Printf("version:   %s\ngit SHA:   %s\nbuilt:     %s\n",
-			project.Version(), project.GitSHA(), project.BuildTimestamp())
-		return
+		fs := flag.NewFlagSet("version", flag.ContinueOnError)
+		dir := fs.String("dir", ".", "path inside the git repository (resolved to the repo root)")
+		ref := fs.String("ref", "HEAD", "git ref to resolve: branch name, tag, or commit SHA")
+		if err := fs.Parse(os.Args[2:]); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				os.Exit(0)
+			}
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(2)
+		}
+		if err := runResolve(*dir, *ref); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
 	case "validate":
 		if err := runValidate(os.Args[2:]); err != nil {
 			switch {
@@ -88,16 +90,9 @@ Flags:
 				os.Exit(2)
 			}
 		}
-		return
-	}
-
-	dir := flag.String("dir", ".", "path inside the git repository (resolved to the repo root)")
-	ref := flag.String("ref", "HEAD", "git ref to resolve: branch name, tag, or commit SHA")
-	flag.Parse()
-
-	if err := runResolve(*dir, *ref); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
+	default:
+		usage()
+		os.Exit(2)
 	}
 }
 
