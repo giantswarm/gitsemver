@@ -24,7 +24,7 @@ import (
 	"github.com/go-git/go-git/v5/storage/filesystem"
 )
 
-var tagRegex = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+`)
+var tagRegex = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$`)
 var stableTagRegex = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 
 var tagPrefixEnvVarName = "GS_GIT_TAG_PREFIX"
@@ -476,6 +476,9 @@ func (r *Repo) NextVersion(ctx context.Context, bumpType string) (string, error)
 
 	head, err := repo.Head()
 	if err != nil {
+		if errors.Is(err, plumbing.ErrReferenceNotFound) {
+			return "", &ReferenceNotFoundError{message: "HEAD"}
+		}
 		return "", err
 	}
 
@@ -487,6 +490,7 @@ func (r *Repo) NextVersion(ctx context.Context, bumpType string) (string, error)
 	if err != nil {
 		return "", err
 	}
+	defer iter.Close()
 	err = iter.ForEach(func(c *object.Commit) error {
 		v, ok := versionsByHash[c.Hash.String()]
 		if !ok {
@@ -504,6 +508,10 @@ func (r *Repo) NextVersion(ctx context.Context, bumpType string) (string, error)
 	})
 	if err != nil {
 		return "", err
+	}
+
+	if bestStr == "" && (bumpType == "rc" || bumpType == "rc-release") {
+		return "", &ExecutionFailedError{message: "no version tag reachable from HEAD; use patch, minor, major, patch-rc, minor-rc, or major-rc to start from 0.0.0"}
 	}
 
 	lastTag := "v0.0.0"

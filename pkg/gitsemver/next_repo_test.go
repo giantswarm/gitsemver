@@ -2,6 +2,8 @@ package gitsemver
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -139,6 +141,46 @@ func Test_Repo_NextVersion_RCAncestor_rcRelease(t *testing.T) {
 	}
 }
 
+// RC tag is directly on HEAD (not an ancestor) — rc bump must still work.
+func Test_Repo_NextVersion_rcOnHEAD_rcBump(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	repo, gitRepo := newTestRepo(t)
+
+	h := testCreateCommit(t, gitRepo, "rc.txt", nextTestBaseTime)
+	if _, err := gitRepo.CreateTag("v1.2.3-rc.2", h, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := repo.NextVersion(ctx, "rc")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "1.2.3-rc.3" {
+		t.Errorf("NextVersion = %q, want %q", got, "1.2.3-rc.3")
+	}
+}
+
+// RC tag is directly on HEAD (not an ancestor) — rc-release must still work.
+func Test_Repo_NextVersion_rcOnHEAD_rcRelease(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	repo, gitRepo := newTestRepo(t)
+
+	h := testCreateCommit(t, gitRepo, "rc.txt", nextTestBaseTime)
+	if _, err := gitRepo.CreateTag("v1.2.3-rc.2", h, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := repo.NextVersion(ctx, "rc-release")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "1.2.3" {
+		t.Errorf("NextVersion = %q, want %q", got, "1.2.3")
+	}
+}
+
 // Both a stable tag (v1.2.3) and a higher RC tag (v1.3.0-rc.1) are reachable.
 // The RC has higher semver precedence, so it is used as the base.
 func Test_Repo_NextVersion_stableAndRC_rcBump(t *testing.T) {
@@ -183,8 +225,12 @@ func Test_Repo_NextVersion_stableAndRC_patchErrors(t *testing.T) {
 	testCreateCommit(t, gitRepo, "next.txt", nextTestBaseTime.Add(2*time.Hour))
 
 	_, err := repo.NextVersion(ctx, "patch")
-	if err == nil {
-		t.Error("NextVersion(patch) with RC as highest tag: expected error, got nil")
+	var execErr *ExecutionFailedError
+	if !errors.As(err, &execErr) {
+		t.Fatalf("err = %T (%v), want *ExecutionFailedError", err, err)
+	}
+	if !strings.Contains(execErr.Error(), "requires a stable last tag") {
+		t.Errorf("unexpected error message: %v", execErr)
 	}
 }
 
@@ -234,18 +280,22 @@ func Test_Repo_NextVersion_nonReachableTagIgnored(t *testing.T) {
 }
 
 // When multiple stable ancestors are reachable, the highest semver wins (not the nearest commit).
+// v1.3.0 is on the OLDER commit and v1.0.0 on the NEWER one so that log order (newest-first)
+// disagrees with semver order — a naive "first tagged commit found" implementation would return
+// v1.0.0, while the correct implementation returns v1.3.0.
 func Test_Repo_NextVersion_multipleStable_highestSemverWins(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	repo, gitRepo := newTestRepo(t)
 
-	// Commit order: v1.0.0 → v1.3.0 → HEAD (linear)
+	// Older commit carries the HIGHER semver tag.
 	h1 := testCreateCommit(t, gitRepo, "a.txt", nextTestBaseTime)
-	if _, err := gitRepo.CreateTag("v1.0.0", h1, nil); err != nil {
+	if _, err := gitRepo.CreateTag("v1.3.0", h1, nil); err != nil {
 		t.Fatal(err)
 	}
+	// Newer commit carries the LOWER semver tag.
 	h2 := testCreateCommit(t, gitRepo, "b.txt", nextTestBaseTime.Add(time.Hour))
-	if _, err := gitRepo.CreateTag("v1.3.0", h2, nil); err != nil {
+	if _, err := gitRepo.CreateTag("v1.0.0", h2, nil); err != nil {
 		t.Fatal(err)
 	}
 	testCreateCommit(t, gitRepo, "c.txt", nextTestBaseTime.Add(2*time.Hour))
@@ -255,7 +305,7 @@ func Test_Repo_NextVersion_multipleStable_highestSemverWins(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if got != "1.3.1" {
-		t.Errorf("NextVersion = %q, want %q — highest semver v1.3.0 must win", got, "1.3.1")
+		t.Errorf("NextVersion = %q, want %q — highest semver v1.3.0 must win even when on older commit", got, "1.3.1")
 	}
 }
 
@@ -304,8 +354,12 @@ func Test_Repo_NextVersion_multipleTagsOnSameCommit_errors(t *testing.T) {
 	}
 
 	_, err := repo.NextVersion(ctx, "patch")
-	if err == nil {
-		t.Error("NextVersion with two version tags on one commit: expected error, got nil")
+	var execErr *ExecutionFailedError
+	if !errors.As(err, &execErr) {
+		t.Fatalf("err = %T (%v), want *ExecutionFailedError", err, err)
+	}
+	if !strings.Contains(execErr.Error(), "multiple version tags") {
+		t.Errorf("unexpected error message: %v", execErr)
 	}
 }
 
@@ -318,7 +372,11 @@ func Test_Repo_NextVersion_invalidBumpType(t *testing.T) {
 	testCreateCommit(t, gitRepo, "a.txt", nextTestBaseTime)
 
 	_, err := repo.NextVersion(ctx, "bad")
-	if err == nil {
-		t.Error("NextVersion with invalid bump type: expected error, got nil")
+	var execErr *ExecutionFailedError
+	if !errors.As(err, &execErr) {
+		t.Fatalf("err = %T (%v), want *ExecutionFailedError", err, err)
+	}
+	if !strings.Contains(execErr.Error(), "unknown bump type") {
+		t.Errorf("unexpected error message: %v", execErr)
 	}
 }

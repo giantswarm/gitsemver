@@ -86,6 +86,7 @@ Valid bump types:
 | RC `X.Y.Z-rc.N` | `rc-release` | `X.Y.Z` |
 
 When no version tag is reachable from HEAD, `0.0.0` is used as the base.
+Note: `rc` and `rc-release` require an actual reachable RC tag and cannot be used from the implicit `0.0.0` base — start a new RC series with `patch-rc`, `minor-rc`, or `major-rc` instead.
 
 ## Go library
 

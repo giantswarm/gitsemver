@@ -2,11 +2,11 @@
 //
 // Usage:
 //
-//	gitsemver [flags]
+//	gitsemver version [--dir <path>] [--ref <ref>]
+//	gitsemver next <bump-type> [--last-tag <tag>]
 //	gitsemver validate [--type dev|rc|stable|any] <version>
-//	gitsemver version
 //
-// Without a subcommand it resolves and prints the version for a git ref:
+// The "version" subcommand resolves and prints the version for a git ref:
 //
 //	For a ref that carries a stable tag (vX.Y.Z) it prints X.Y.Z.
 //	For a pre-release tag (vX.Y.Z-rc.N) it prints X.Y.Z-rc.N.
@@ -17,19 +17,23 @@
 //	where X.Y.Z is the most recent stable ancestor tag reachable from the ref,
 //	or 0.0.0 when none exists.
 //
+// The "next" subcommand computes the next semver tag from the highest-semver tag
+// reachable from HEAD. Valid bump types from a stable tag: patch, minor, major,
+// patch-rc, minor-rc, major-rc. Valid from an RC tag: rc, rc-release.
+// Use --last-tag to skip git and compute directly from a supplied base tag.
+//
 // The "validate" subcommand checks whether a version string matches the
 // expected format.  It exits 0 and prints "valid" on success, exits 1 and
 // prints "invalid" otherwise.
-//
-// The "version" subcommand prints the build version (git tag), git SHA, and
-// build timestamp embedded at link time.
 //
 // Environment variables:
 //
 //	GS_BRANCH_NAME      Override the branch name embedded in dev builds.
 //	                    Defaults to the HEAD branch of the repo, then "unknown".
 //	GS_GIT_TAG_PREFIX   Monorepo support: only consider tags prefixed with
-//	                    "<value>/", e.g. "module-a/v1.2.3".
+//	                    "<value>/", e.g. "module-a/v1.2.3". The "next --last-tag"
+//	                    flag accepts both prefixed ("module-a/v1.2.3") and bare
+//	                    ("v1.2.3") forms; the prefix is stripped automatically.
 package main
 
 import (
@@ -37,10 +41,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	"github.com/giantswarm/gitsemver/pkg/gitsemver"
-	"github.com/giantswarm/gitsemver/pkg/project"
 )
 
 // errInvalidVersion is returned by runValidate when the version string does
@@ -49,25 +54,21 @@ import (
 var errInvalidVersion = errors.New("invalid")
 
 func main() {
-	flag.Usage = func() {
-		_, _ = fmt.Fprintf(flag.CommandLine.Output(), `Usage:
-  gitsemver [flags]
+	usage := func() {
+		_, _ = fmt.Fprintf(os.Stderr, `Usage:
+  gitsemver version [--dir <path>] [--ref <ref>]
   gitsemver next <patch|minor|major|patch-rc|minor-rc|major-rc|rc|rc-release> [--last-tag <tag>]
   gitsemver validate [--type dev|rc|stable|any] <version>
-  gitsemver version
 
 Subcommands:
+  version     Resolve and print the semver version for a git ref.
   next        Compute the next semver tag after the last tag reachable from HEAD.
               Bump types from a stable tag: patch, minor, major, patch-rc, minor-rc, major-rc.
               Bump types from an RC tag:    rc (bump counter), rc-release (finalize to stable).
               Use --last-tag to supply the base tag explicitly (no git repo needed).
   validate    Check whether a version string matches a known format.
               Exits 0 and prints "valid" on success, 1 and "invalid" otherwise.
-  version     Print the build version, git SHA, and build timestamp.
-
-Flags:
 `)
-		flag.PrintDefaults()
 	}
 
 	sub := ""
@@ -77,9 +78,21 @@ Flags:
 
 	switch sub {
 	case "version":
-		fmt.Printf("version:   %s\ngit SHA:   %s\nbuilt:     %s\n",
-			project.Version(), project.GitSHA(), project.BuildTimestamp())
-		return
+		fs := flag.NewFlagSet("version", flag.ContinueOnError)
+		fs.SetOutput(io.Discard)
+		dir := fs.String("dir", ".", "path inside the git repository (resolved to the repo root)")
+		ref := fs.String("ref", "HEAD", "git ref to resolve: branch name, tag, or commit SHA")
+		if err := fs.Parse(os.Args[2:]); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				os.Exit(0)
+			}
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(2)
+		}
+		if err := runResolve(*dir, *ref); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
 	case "next":
 		if err := runNext(os.Args[2:]); err != nil {
 			switch {
@@ -90,7 +103,6 @@ Flags:
 				os.Exit(1)
 			}
 		}
-		return
 	case "validate":
 		if err := runValidate(os.Args[2:]); err != nil {
 			switch {
@@ -104,16 +116,9 @@ Flags:
 				os.Exit(2)
 			}
 		}
-		return
-	}
-
-	dir := flag.String("dir", ".", "path inside the git repository (resolved to the repo root)")
-	ref := flag.String("ref", "HEAD", "git ref to resolve: branch name, tag, or commit SHA")
-	flag.Parse()
-
-	if err := runResolve(*dir, *ref); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
+	default:
+		usage()
+		os.Exit(2)
 	}
 }
 
@@ -156,6 +161,7 @@ var validBumpTypes = map[string]bool{
 
 func runNext(args []string) error {
 	fs := flag.NewFlagSet("next", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
 	lastTag := fs.String("last-tag", "", "base tag to compute from; when set, no git repo is needed")
 
 	// Extract the bump type by value before flag parsing so that both
@@ -186,7 +192,11 @@ func runNext(args []string) error {
 	}
 
 	if *lastTag != "" {
-		next, err := gitsemver.ComputeNextVersion(*lastTag, bumpType)
+		tag := *lastTag
+		if prefix := strings.TrimSpace(os.Getenv("GS_GIT_TAG_PREFIX")); prefix != "" {
+			tag = strings.TrimPrefix(tag, prefix+"/")
+		}
+		next, err := gitsemver.ComputeNextVersion(tag, bumpType)
 		if err != nil {
 			return err
 		}
@@ -214,7 +224,7 @@ func runNext(args []string) error {
 
 	version, err := repo.NextVersion(ctx, bumpType)
 	if err != nil {
-		return fmt.Errorf("computing next version: %w", err)
+		return err
 	}
 
 	fmt.Println(version)
@@ -223,6 +233,7 @@ func runNext(args []string) error {
 
 func runValidate(args []string) error {
 	fs := flag.NewFlagSet("validate", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
 	typFlag := fs.String("type", "any", "version type to validate: dev, rc, stable, or any")
 
 	if err := fs.Parse(args); err != nil {

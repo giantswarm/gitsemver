@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -934,5 +935,30 @@ func Test_Repo_ResolveVersion_nonReachableTagIgnored(t *testing.T) {
 	const want = "1.0.1-dev.test-branch.2026-01-27.09-49-59"
 	if version != want {
 		t.Errorf("ResolveVersion = %q, want %q — non-reachable v2.0.0 on side branch must be ignored", version, want)
+	}
+}
+
+// A commit carrying two version tags must produce an error from ResolveVersion,
+// not silently return a randomly chosen version (symmetric with the NextVersion test).
+func Test_Repo_ResolveVersion_multipleTagsOnSameCommit_errors(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	repo, gitRepo := newTestRepo(t)
+
+	h := testCreateCommit(t, gitRepo, "a.txt", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+	if _, err := gitRepo.CreateTag("v1.0.0", h, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gitRepo.CreateTag("v1.0.1", h, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := repo.ResolveVersion(ctx, h.String())
+	execErr, ok := err.(*ExecutionFailedError)
+	if !ok {
+		t.Fatalf("err = %T (%v), want *ExecutionFailedError", err, err)
+	}
+	if !strings.Contains(execErr.Error(), "multiple version tags") {
+		t.Errorf("unexpected error message: %v", execErr)
 	}
 }

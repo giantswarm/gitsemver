@@ -27,12 +27,21 @@ func parseVersionString(v string) (parsedVersion, error) {
 		}
 	}
 	pv := parsedVersion{}
-	pv.major, _ = strconv.Atoi(m[1])
-	pv.minor, _ = strconv.Atoi(m[2])
-	pv.patch, _ = strconv.Atoi(m[3])
+	var err error
+	if pv.major, err = strconv.Atoi(m[1]); err != nil {
+		return parsedVersion{}, &ExecutionFailedError{message: fmt.Sprintf("major component of %q overflows int: %v", v, err)}
+	}
+	if pv.minor, err = strconv.Atoi(m[2]); err != nil {
+		return parsedVersion{}, &ExecutionFailedError{message: fmt.Sprintf("minor component of %q overflows int: %v", v, err)}
+	}
+	if pv.patch, err = strconv.Atoi(m[3]); err != nil {
+		return parsedVersion{}, &ExecutionFailedError{message: fmt.Sprintf("patch component of %q overflows int: %v", v, err)}
+	}
 	if m[4] != "" {
 		pv.isRC = true
-		pv.rcNum, _ = strconv.Atoi(m[4])
+		if pv.rcNum, err = strconv.Atoi(m[4]); err != nil {
+			return parsedVersion{}, &ExecutionFailedError{message: fmt.Sprintf("RC number in %q overflows int: %v", v, err)}
+		}
 	}
 	return pv, nil
 }
@@ -40,14 +49,23 @@ func parseVersionString(v string) (parsedVersion, error) {
 // compareSemver returns negative, zero, or positive comparing a to b.
 // Follows semver §11: stable has higher precedence than RC at the same X.Y.Z.
 func compareSemver(a, b parsedVersion) int {
-	if d := a.major - b.major; d != 0 {
-		return d
+	if a.major != b.major {
+		if a.major < b.major {
+			return -1
+		}
+		return 1
 	}
-	if d := a.minor - b.minor; d != 0 {
-		return d
+	if a.minor != b.minor {
+		if a.minor < b.minor {
+			return -1
+		}
+		return 1
 	}
-	if d := a.patch - b.patch; d != 0 {
-		return d
+	if a.patch != b.patch {
+		if a.patch < b.patch {
+			return -1
+		}
+		return 1
 	}
 	switch {
 	case !a.isRC && !b.isRC:
@@ -57,7 +75,13 @@ func compareSemver(a, b parsedVersion) int {
 	case !a.isRC && b.isRC:
 		return 1 // a is stable, b is RC → a > b
 	default:
-		return a.rcNum - b.rcNum
+		if a.rcNum != b.rcNum {
+			if a.rcNum < b.rcNum {
+				return -1
+			}
+			return 1
+		}
+		return 0
 	}
 }
 
@@ -89,7 +113,20 @@ func ComputeNextVersion(lastTag, bumpType string) (string, error) {
 				bumpType, lastTag,
 			)}
 		}
-		return applyStableBump(pv, bumpType), nil
+		switch bumpType {
+		case "patch":
+			return fmt.Sprintf("%d.%d.%d", pv.major, pv.minor, pv.patch+1), nil
+		case "minor":
+			return fmt.Sprintf("%d.%d.0", pv.major, pv.minor+1), nil
+		case "major":
+			return fmt.Sprintf("%d.0.0", pv.major+1), nil
+		case "patch-rc":
+			return fmt.Sprintf("%d.%d.%d-rc.1", pv.major, pv.minor, pv.patch+1), nil
+		case "minor-rc":
+			return fmt.Sprintf("%d.%d.0-rc.1", pv.major, pv.minor+1), nil
+		case "major-rc":
+			return fmt.Sprintf("%d.0.0-rc.1", pv.major+1), nil
+		}
 	case "rc":
 		if !pv.isRC {
 			return "", &ExecutionFailedError{message: fmt.Sprintf(
@@ -106,28 +143,9 @@ func ComputeNextVersion(lastTag, bumpType string) (string, error) {
 			)}
 		}
 		return fmt.Sprintf("%d.%d.%d", pv.major, pv.minor, pv.patch), nil
-	default:
-		return "", &ExecutionFailedError{message: fmt.Sprintf(
-			"unknown bump type %q: must be one of patch, minor, major, patch-rc, minor-rc, major-rc, rc, rc-release",
-			bumpType,
-		)}
 	}
-}
-
-func applyStableBump(pv parsedVersion, bumpType string) string {
-	switch bumpType {
-	case "patch":
-		return fmt.Sprintf("%d.%d.%d", pv.major, pv.minor, pv.patch+1)
-	case "minor":
-		return fmt.Sprintf("%d.%d.0", pv.major, pv.minor+1)
-	case "major":
-		return fmt.Sprintf("%d.0.0", pv.major+1)
-	case "patch-rc":
-		return fmt.Sprintf("%d.%d.%d-rc.1", pv.major, pv.minor, pv.patch+1)
-	case "minor-rc":
-		return fmt.Sprintf("%d.%d.0-rc.1", pv.major, pv.minor+1)
-	case "major-rc":
-		return fmt.Sprintf("%d.0.0-rc.1", pv.major+1)
-	}
-	panic("unreachable: applyStableBump called with " + bumpType)
+	return "", &ExecutionFailedError{message: fmt.Sprintf(
+		"unknown bump type %q: must be one of patch, minor, major, patch-rc, minor-rc, major-rc, rc, rc-release",
+		bumpType,
+	)}
 }
