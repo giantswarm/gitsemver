@@ -6,6 +6,18 @@ import (
 	"strconv"
 )
 
+// Bump type constants for use with ComputeNextVersion and NextVersion.
+const (
+	BumpTypePatch     = "patch"
+	BumpTypeMinor     = "minor"
+	BumpTypeMajor     = "major"
+	BumpTypePatchRC   = "patch-rc"
+	BumpTypeMinorRC   = "minor-rc"
+	BumpTypeMajorRC   = "major-rc"
+	BumpTypeRC        = "rc"
+	BumpTypeRCRelease = "rc-release"
+)
+
 // parsedVersion holds the numeric components of a semver string.
 type parsedVersion struct {
 	major, minor, patch int
@@ -92,6 +104,10 @@ func compareSemver(a, b parsedVersion) int {
 // Valid from an RC tag (X.Y.Z-rc.N): rc (bump counter), rc-release (finalize to stable).
 //
 // The returned string never carries a leading "v".
+//
+// Callers are responsible for stripping the GS_GIT_TAG_PREFIX and the
+// separating "/" before passing lastTag to this function. For example,
+// "module-a/v1.2.3" must be passed as "v1.2.3" (or "1.2.3").
 func ComputeNextVersion(lastTag, bumpType string) (string, error) {
 	if lastTag == "" {
 		return "", &ExecutionFailedError{message: "lastTag must not be empty"}
@@ -106,7 +122,7 @@ func ComputeNextVersion(lastTag, bumpType string) (string, error) {
 	}
 
 	switch bumpType {
-	case "patch", "minor", "major", "patch-rc", "minor-rc", "major-rc":
+	case BumpTypePatch, BumpTypeMinor, BumpTypeMajor, BumpTypePatchRC, BumpTypeMinorRC, BumpTypeMajorRC:
 		if pv.isRC {
 			return "", &ExecutionFailedError{message: fmt.Sprintf(
 				"bump type %q requires a stable last tag; %q is an RC — use 'rc' to bump the counter or 'rc-release' to finalize",
@@ -114,20 +130,20 @@ func ComputeNextVersion(lastTag, bumpType string) (string, error) {
 			)}
 		}
 		switch bumpType {
-		case "patch":
+		case BumpTypePatch:
 			return fmt.Sprintf("%d.%d.%d", pv.major, pv.minor, pv.patch+1), nil
-		case "minor":
+		case BumpTypeMinor:
 			return fmt.Sprintf("%d.%d.0", pv.major, pv.minor+1), nil
-		case "major":
+		case BumpTypeMajor:
 			return fmt.Sprintf("%d.0.0", pv.major+1), nil
-		case "patch-rc":
+		case BumpTypePatchRC:
 			return fmt.Sprintf("%d.%d.%d-rc.1", pv.major, pv.minor, pv.patch+1), nil
-		case "minor-rc":
+		case BumpTypeMinorRC:
 			return fmt.Sprintf("%d.%d.0-rc.1", pv.major, pv.minor+1), nil
-		case "major-rc":
+		case BumpTypeMajorRC:
 			return fmt.Sprintf("%d.0.0-rc.1", pv.major+1), nil
 		}
-	case "rc":
+	case BumpTypeRC:
 		if !pv.isRC {
 			return "", &ExecutionFailedError{message: fmt.Sprintf(
 				"bump type 'rc' requires an RC last tag; %q is stable — use 'patch-rc', 'minor-rc', or 'major-rc' to start a new RC series",
@@ -135,7 +151,7 @@ func ComputeNextVersion(lastTag, bumpType string) (string, error) {
 			)}
 		}
 		return fmt.Sprintf("%d.%d.%d-rc.%d", pv.major, pv.minor, pv.patch, pv.rcNum+1), nil
-	case "rc-release":
+	case BumpTypeRCRelease:
 		if !pv.isRC {
 			return "", &ExecutionFailedError{message: fmt.Sprintf(
 				"bump type 'rc-release' requires an RC last tag; %q is already a stable release",

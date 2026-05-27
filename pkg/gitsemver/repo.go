@@ -2,6 +2,7 @@ package gitsemver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-errors/errors"
 	billy "github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/osfs"
 	git "github.com/go-git/go-git/v5"
@@ -95,12 +95,10 @@ func New(config Config) (*Repo, error) {
 	}
 
 	var auth transport.AuthMethod
-	{
-		if config.AuthBasicToken != "" {
-			auth = &http.BasicAuth{
-				Username: "can-be-anything-but-not-empty",
-				Password: config.AuthBasicToken,
-			}
+	if config.AuthBasicToken != "" {
+		auth = &http.BasicAuth{
+			Username: "can-be-anything-but-not-empty",
+			Password: config.AuthBasicToken,
 		}
 	}
 
@@ -225,14 +223,14 @@ func (r *Repo) HeadSHA(ctx context.Context) (string, error) {
 
 // HeadTag returns tag for the HEAD ref.
 //
-// If GS_TAG_PREFIX environment variable is set, it looks for tags prefixed with that.
+// If GS_GIT_TAG_PREFIX environment variable is set, it looks for tags prefixed with that.
 // For example, when the value is 'module-a', it filters found tags to 'module-a/v1.2.0',
 // must match <module_name>/v<semantic_version>.
 //
-// Note: if GS_TAG_PREFIX is not set, all tags matching the prefixed tag regex are filtered out!
+// Note: if GS_GIT_TAG_PREFIX is not set, all tags matching the prefixed tag regex are filtered out!
 //
-// It returns error handled by IsReferenceNotFound if the HEAD ref is not
-// tagged.
+// It returns a *ReferenceNotFoundError when the HEAD ref is not tagged,
+// detectable via errors.Is(err, &ReferenceNotFoundError{}).
 func (r *Repo) HeadTag(ctx context.Context) (string, error) {
 	repo, err := git.Open(r.storage, r.worktree)
 	if err != nil {
@@ -330,7 +328,8 @@ func buildVersionMaps(tagsByHash map[string][]string, tagPrefix string) (version
 // If GS_GIT_TAG_PREFIX is set, only tags prefixed with "<value>/" are considered,
 // e.g. "module-a/v1.2.3". The prefix, separator, and "v" are stripped from the result.
 //
-// It returns an error handled by IsReferenceNotFound if the reference cannot be resolved.
+// It returns a *ReferenceNotFoundError when the reference cannot be resolved,
+// detectable via errors.Is(err, &ReferenceNotFoundError{}).
 func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 	repo, err := git.Open(r.storage, r.worktree)
 	if err != nil {
@@ -349,26 +348,20 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 	}
 
 	var commit *object.Commit
-	{
-		hash, err := repo.ResolveRevision(plumbing.Revision(ref))
-		if errors.Is(err, plumbing.ErrReferenceNotFound) {
-			return "", &ReferenceNotFoundError{message: fmt.Sprintf("%#q", ref)}
-		} else if err != nil {
-			return "", err
-		}
-
-		commit, err = repo.CommitObject(*hash)
-		if err != nil {
-			return "", err
-		}
+	hash, err := repo.ResolveRevision(plumbing.Revision(ref))
+	if errors.Is(err, plumbing.ErrReferenceNotFound) {
+		return "", &ReferenceNotFoundError{message: fmt.Sprintf("%#q", ref)}
+	} else if err != nil {
+		return "", err
+	}
+	commit, err = repo.CommitObject(*hash)
+	if err != nil {
+		return "", err
 	}
 
 	// When the commit is tagged return the tag.
-	{
-		version, ok := versionsByHash[commit.Hash.String()]
-		if ok {
-			return version, nil
-		}
+	if version, ok := versionsByHash[commit.Hash.String()]; ok {
+		return version, nil
 	}
 
 	// Otherwise walk ancestors to find the most recent stable tagged parent,
@@ -376,71 +369,68 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 	// The queue only ever holds commits reachable from `commit` (parents of parents,
 	// etc.), so stableVersionsByHash is only consulted for actual ancestors — tags
 	// on unrelated branches are never returned.
-	var pseudoVersion string
-	{
-		var lastStableVersion string
+	var lastStableVersion string
 
-		queue := []*object.Commit{
-			commit,
-		}
-
-		for len(queue) > 0 {
-			// Pop the first element from the queue.
-			c := queue[0]
-			queue = queue[1:]
-
-			// Check if this commit has a stable tag. RC and other pre-release
-			// tags are intentionally skipped so the dev build base is always
-			// derived from the last stable release.
-			v, ok := stableVersionsByHash[c.Hash.String()]
-			if ok {
-				lastStableVersion = v
-				break
-			}
-
-			// Push all the parents to the queue.
-			err = c.Parents().ForEach(func(p *object.Commit) error {
-				// If the commit is already in the queue skip
-				// it. This is possible multiple commits have
-				// the same parent. Adding all of them to the
-				// queue may lead in exponential growth of the
-				// queue resulting in extremely long execution.
-				for _, c := range queue {
-					if c.Hash == p.Hash {
-						return nil
-					}
-				}
-
-				queue = append(queue, p)
-				return nil
-			})
-			if err != nil {
-				return "", err
-			}
-
-			// Sort commits in the queue by commit date in
-			// descending order to find the most recent tag first.
-			sort.Slice(queue, func(i, j int) bool { return queue[i].Committer.When.After(queue[j].Committer.When) })
-		}
-
-		var base string
-		if lastStableVersion == "" {
-			base = "0.0.0"
-		} else {
-			base, err = incrementPatch(lastStableVersion)
-			if err != nil {
-				return "", err
-			}
-		}
-		branch := sanitizeBranchName(currentBranch())
-		t := nowFunc().UTC()
-		pseudoVersion = fmt.Sprintf("%s-dev.%s.%s.%s",
-			base,
-			branch,
-			t.Format("2006-01-02"),
-			t.Format("15-04-05"),
-		)
+	queue := []*object.Commit{
+		commit,
 	}
+
+	for len(queue) > 0 {
+		// Pop the first element from the queue.
+		c := queue[0]
+		queue = queue[1:]
+
+		// Check if this commit has a stable tag. RC and other pre-release
+		// tags are intentionally skipped so the dev build base is always
+		// derived from the last stable release.
+		v, ok := stableVersionsByHash[c.Hash.String()]
+		if ok {
+			lastStableVersion = v
+			break
+		}
+
+		// Push all the parents to the queue.
+		err = c.Parents().ForEach(func(p *object.Commit) error {
+			// If the commit is already in the queue skip
+			// it. This is possible multiple commits have
+			// the same parent. Adding all of them to the
+			// queue may lead in exponential growth of the
+			// queue resulting in extremely long execution.
+			for _, c := range queue {
+				if c.Hash == p.Hash {
+					return nil
+				}
+			}
+
+			queue = append(queue, p)
+			return nil
+		})
+		if err != nil {
+			return "", err
+		}
+
+		// Sort commits in the queue by commit date in
+		// descending order to find the most recent tag first.
+		sort.Slice(queue, func(i, j int) bool { return queue[i].Committer.When.After(queue[j].Committer.When) })
+	}
+
+	var base string
+	if lastStableVersion == "" {
+		base = "0.0.0"
+	} else {
+		base, err = incrementPatch(lastStableVersion)
+		if err != nil {
+			return "", err
+		}
+	}
+	branch := sanitizeBranchName(currentBranch())
+	t := nowFunc().UTC()
+	pseudoVersion := fmt.Sprintf("%s-dev.%s.%s.%s",
+		base,
+		branch,
+		t.Format("2006-01-02"),
+		t.Format("15-04-05"),
+	)
 
 	return pseudoVersion, nil
 }
@@ -522,9 +512,10 @@ func (r *Repo) NextVersion(ctx context.Context, bumpType string) (string, error)
 	return ComputeNextVersion(lastTag, bumpType)
 }
 
-// GetFileContent retrieves content of file stored at path on version specified in ref.
+// ReadFileAtRef retrieves content of file stored at path on version specified in ref.
 // When empty ref defaults to master branch.
-func (r *Repo) GetFileContent(path, ref string) ([]byte, error) {
+// Note: internally this checks out the given ref, mutating the working tree.
+func (r *Repo) ReadFileAtRef(_ context.Context, path, ref string) ([]byte, error) {
 	worktree, err := r.checkoutRef(ref)
 	if err != nil {
 		return nil, err
@@ -545,9 +536,10 @@ func (r *Repo) GetFileContent(path, ref string) ([]byte, error) {
 	return content, nil
 }
 
-// GetFolderContent retrieves content of a folder stored at path on version specified in ref.
+// ReadFolderAtRef retrieves content of a folder stored at path on version specified in ref.
 // When empty ref defaults to master branch.
-func (r *Repo) GetFolderContent(path, ref string) ([]os.FileInfo, error) {
+// Note: internally this checks out the given ref, mutating the working tree.
+func (r *Repo) ReadFolderAtRef(_ context.Context, path, ref string) ([]os.FileInfo, error) {
 	worktree, err := r.checkoutRef(ref)
 	if err != nil {
 		return nil, err
@@ -622,14 +614,7 @@ func (r *Repo) tags(repo *git.Repository) (map[string][]string, error) {
 		defer tagsIter.Close()
 
 		err = tagsIter.ForEach(func(tag *plumbing.Reference) error {
-			v := tags[tag.Hash().String()]
-			if v == nil {
-				v = []string{}
-			}
-			v = append(v, tag.Name().Short())
-
-			tags[tag.Hash().String()] = v
-
+			tags[tag.Hash().String()] = append(tags[tag.Hash().String()], tag.Name().Short())
 			return nil
 		})
 		if err != nil {
@@ -650,15 +635,7 @@ func (r *Repo) tags(repo *git.Repository) (map[string][]string, error) {
 			if err != nil {
 				return err
 			}
-
-			v := tags[commit.Hash.String()]
-			if v == nil {
-				v = []string{}
-			}
-			v = append(v, tag.Name)
-
-			tags[commit.Hash.String()] = v
-
+			tags[commit.Hash.String()] = append(tags[commit.Hash.String()], tag.Name)
 			return nil
 		})
 		if err != nil {

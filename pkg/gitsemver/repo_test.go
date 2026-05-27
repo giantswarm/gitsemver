@@ -3,6 +3,7 @@ package gitsemver
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -12,8 +13,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/go-errors/errors"
 
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -30,8 +29,7 @@ func Test_New_optionalURL(t *testing.T) {
 
 	ctx := context.Background()
 
-	dir := "/tmp/gitsemver-test-new-optionalurl"
-	defer func() { _ = os.RemoveAll(dir) }()
+	dir := t.TempDir()
 
 	url := "git@github.com:giantswarm/gitsemver-test.git"
 
@@ -79,14 +77,11 @@ func Test_Repo_EnsureUpToDate_nosuchrepo(t *testing.T) {
 	ctx := context.Background()
 	var err error
 
-	dir := "/tmp/gitsemver-test-ensureuptodate-nosuchrepo"
-	defer func() { _ = os.RemoveAll(dir) }()
+	dir := t.TempDir()
 
 	// Checkout the gitsemver-test repository.
 	var repo *Repo
 	{
-		defer func() { _ = os.RemoveAll(dir) }()
-
 		c := Config{
 			Dir: dir,
 			URL: "git@github.com:giantswarm/does-not-exist.git",
@@ -116,14 +111,11 @@ func Test_Repo_Head(t *testing.T) {
 	ctx := context.Background()
 	var err error
 
-	dir := "/tmp/gitsemver-test-repo-headbranch"
-	defer func() { _ = os.RemoveAll(dir) }()
+	dir := t.TempDir()
 
 	// Checkout the gitsemver-test repository.
 	var repo *Repo
 	{
-		defer func() { _ = os.RemoveAll(dir) }()
-
 		c := Config{
 			Dir: dir,
 			URL: "git@github.com:giantswarm/gitsemver-test.git",
@@ -422,8 +414,7 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 		},
 	}
 
-	dir := "/tmp/gitsemver-test-repo-resolveversion"
-	defer func() { _ = os.RemoveAll(dir) }()
+	dir := t.TempDir()
 
 	c := Config{
 		Dir: dir,
@@ -553,8 +544,8 @@ func Test_Repo_GetFileContent(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Log(tc.name)
 
-			dir := fmt.Sprintf("/tmp/gitsemver-test-repo-getfilecontent-%d", i)
-			defer func() { _ = os.RemoveAll(dir) }()
+			// Must not pre-exist: EnsureUpToDate skips checkout when the dir is already there.
+			dir := filepath.Join(t.TempDir(), "repo")
 
 			c := Config{
 				Dir: dir,
@@ -571,7 +562,7 @@ func Test_Repo_GetFileContent(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			content, err := repo.GetFileContent(tc.path, tc.ref)
+			content, err := repo.ReadFileAtRef(ctx, tc.path, tc.ref)
 
 			switch {
 			case err == nil && tc.expectedError == nil:
@@ -659,8 +650,7 @@ func Test_Repo_GetFolderContent(t *testing.T) {
 		},
 	}
 
-	dir := "/tmp/gitsemver-test-repo-getfoldercontent"
-	defer func() { _ = os.RemoveAll(dir) }()
+	dir := t.TempDir()
 
 	c := Config{
 		Dir: dir,
@@ -682,7 +672,7 @@ func Test_Repo_GetFolderContent(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Log(tc.name)
 
-			files, err := repo.GetFolderContent(tc.path, tc.ref)
+			files, err := repo.ReadFolderAtRef(ctx, tc.path, tc.ref)
 
 			switch {
 			case err == nil && tc.expectedError == nil:

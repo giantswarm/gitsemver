@@ -89,7 +89,7 @@ Subcommands:
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(2)
 		}
-		if err := runResolve(*dir, *ref); err != nil {
+		if err := runVersion(*dir, *ref); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
@@ -122,25 +122,17 @@ Subcommands:
 	}
 }
 
-func runResolve(dir, ref string) error {
+func runVersion(dir, ref string) error {
 	ctx := context.Background()
 
-	topLevel, err := gitsemver.TopLevel(ctx, dir)
+	topLevel, err := gitsemver.TopLevel(dir)
 	if err != nil {
 		return fmt.Errorf("finding git root from %q: %w", dir, err)
 	}
 
-	repo, err := gitsemver.New(gitsemver.Config{Dir: topLevel})
+	repo, err := openRepo(topLevel)
 	if err != nil {
-		// New() fails when there is no origin remote and no URL was given.
-		// Fall back to a placeholder URL so we can still read local tags.
-		var invalidCfg *gitsemver.InvalidConfigError
-		if errors.As(err, &invalidCfg) {
-			repo, err = gitsemver.New(gitsemver.Config{Dir: topLevel, URL: "_"})
-		}
-		if err != nil {
-			return fmt.Errorf("opening repository at %q: %w", topLevel, err)
-		}
+		return err
 	}
 
 	version, err := repo.ResolveVersion(ctx, ref)
@@ -152,11 +144,27 @@ func runResolve(dir, ref string) error {
 	return nil
 }
 
+func openRepo(topLevel string) (*gitsemver.Repo, error) {
+	repo, err := gitsemver.New(gitsemver.Config{Dir: topLevel})
+	if err != nil {
+		// New() fails when there is no origin remote and no URL was given.
+		// Fall back to a placeholder URL so we can still read local tags.
+		var invalidCfg *gitsemver.InvalidConfigError
+		if errors.As(err, &invalidCfg) {
+			repo, err = gitsemver.New(gitsemver.Config{Dir: topLevel, URL: "_"})
+		}
+		if err != nil {
+			return nil, fmt.Errorf("opening repository at %q: %w", topLevel, err)
+		}
+	}
+	return repo, nil
+}
+
 // validBumpTypes lists all accepted values for the "next" bump type argument.
 var validBumpTypes = map[string]bool{
-	"patch": true, "minor": true, "major": true,
-	"patch-rc": true, "minor-rc": true, "major-rc": true,
-	"rc": true, "rc-release": true,
+	gitsemver.BumpTypePatch: true, gitsemver.BumpTypeMinor: true, gitsemver.BumpTypeMajor: true,
+	gitsemver.BumpTypePatchRC: true, gitsemver.BumpTypeMinorRC: true, gitsemver.BumpTypeMajorRC: true,
+	gitsemver.BumpTypeRC: true, gitsemver.BumpTypeRCRelease: true,
 }
 
 func runNext(args []string) error {
@@ -170,13 +178,15 @@ func runNext(args []string) error {
 	// are accepted.
 	var bumpType string
 	var flagArgs []string
-	for i, a := range args {
-		prevIsLastTagFlag := i > 0 && (args[i-1] == "--last-tag" || args[i-1] == "-last-tag")
+	var prevArg string
+	for _, a := range args {
+		prevIsLastTagFlag := prevArg == "--last-tag" || prevArg == "-last-tag"
 		if validBumpTypes[a] && bumpType == "" && !prevIsLastTagFlag {
 			bumpType = a
 		} else {
 			flagArgs = append(flagArgs, a)
 		}
+		prevArg = a
 	}
 
 	if err := fs.Parse(flagArgs); err != nil {
@@ -206,25 +216,19 @@ func runNext(args []string) error {
 
 	ctx := context.Background()
 
-	topLevel, err := gitsemver.TopLevel(ctx, ".")
+	topLevel, err := gitsemver.TopLevel(".")
 	if err != nil {
 		return fmt.Errorf("finding git root: %w", err)
 	}
 
-	repo, err := gitsemver.New(gitsemver.Config{Dir: topLevel})
+	repo, err := openRepo(topLevel)
 	if err != nil {
-		var invalidCfg *gitsemver.InvalidConfigError
-		if errors.As(err, &invalidCfg) {
-			repo, err = gitsemver.New(gitsemver.Config{Dir: topLevel, URL: "_"})
-		}
-		if err != nil {
-			return fmt.Errorf("opening repository at %q: %w", topLevel, err)
-		}
+		return err
 	}
 
 	version, err := repo.NextVersion(ctx, bumpType)
 	if err != nil {
-		return err
+		return fmt.Errorf("computing next version: %w", err)
 	}
 
 	fmt.Println(version)

@@ -2,7 +2,7 @@ package gitsemver
 
 import "testing"
 
-func TestIsValidStable(t *testing.T) {
+func Test_IsValidStable(t *testing.T) {
 	t.Parallel()
 
 	valid := []string{
@@ -43,7 +43,7 @@ func TestIsValidStable(t *testing.T) {
 	}
 }
 
-func TestIsValidRC(t *testing.T) {
+func Test_IsValidRC(t *testing.T) {
 	t.Parallel()
 
 	valid := []string{
@@ -84,7 +84,7 @@ func TestIsValidRC(t *testing.T) {
 	}
 }
 
-func TestIsValidDev(t *testing.T) {
+func Test_IsValidDev(t *testing.T) {
 	t.Parallel()
 
 	valid := []string{
@@ -137,7 +137,7 @@ func TestIsValidDev(t *testing.T) {
 	}
 }
 
-func TestIsValid(t *testing.T) {
+func Test_IsValid(t *testing.T) {
 	t.Parallel()
 
 	valid := []string{

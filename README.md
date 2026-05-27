@@ -31,26 +31,25 @@ go install github.com/giantswarm/gitsemver@latest
 
 ```
 Usage:
-  gitsemver [flags]
+  gitsemver version [--dir <path>] [--ref <ref>]
   gitsemver next <patch|minor|major|patch-rc|minor-rc|major-rc|rc|rc-release> [--last-tag <tag>]
   gitsemver validate [--type dev|rc|stable|any] <version>
-  gitsemver version
 ```
 
-### Resolve (default)
+### version
 
 Print the version for a git ref:
 
 ```
-  -dir string   path inside the git repository (default ".", resolved to repo root)
-  -ref string   git ref to resolve: branch name, tag, or commit SHA (default "HEAD")
+  --dir string   path inside the git repository (default ".", resolved to repo root)
+  --ref string   git ref to resolve: branch name, tag, or commit SHA (default "HEAD")
 ```
 
 ```sh
-$ GS_BRANCH_NAME=my-feature gitsemver
+$ GS_BRANCH_NAME=my-feature gitsemver version
 1.2.4-dev.my-feature.2026-01-27.09-49-59
 
-$ gitsemver --ref v1.2.3
+$ gitsemver version --ref v1.2.3
 1.2.3
 ```
 

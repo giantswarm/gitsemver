@@ -1,7 +1,6 @@
 package gitsemver
 
 import (
-	"context"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -31,8 +30,6 @@ func Test_TopLevel(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Log(tc.name)
 
-			ctx := context.Background()
-
 			abs, err := filepath.Abs(".")
 			if err != nil {
 				t.Fatalf("err = %v, want %v", err, nil)
@@ -42,7 +39,7 @@ func Test_TopLevel(t *testing.T) {
 
 			// Check with relative path.
 			{
-				dir, err := TopLevel(ctx, tc.inputPath)
+				dir, err := TopLevel(tc.inputPath)
 				if err != nil {
 					t.Fatalf("err = %v, want %v", err, nil)
 				}
@@ -54,7 +51,7 @@ func Test_TopLevel(t *testing.T) {
 
 			// Check with absolute path.
 			{
-				dir, err := TopLevel(ctx, filepath.Join(abs, tc.inputPath))
+				dir, err := TopLevel(filepath.Join(abs, tc.inputPath))
 				if err != nil {
 					t.Fatalf("err = %v, want %v", err, nil)
 				}
