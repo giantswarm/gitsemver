@@ -33,7 +33,7 @@ type FileNotFoundError struct {
 }
 
 func (e *FileNotFoundError) Error() string {
-	return "fileNotFoundError: " + e.message
+	return "FileNotFoundError: " + e.message
 }
 
 func (e *FileNotFoundError) Is(target error) bool {
@@ -45,7 +45,7 @@ type FolderNotFoundError struct {
 }
 
 func (e *FolderNotFoundError) Error() string {
-	return "folderNotFoundError: " + e.message
+	return "FolderNotFoundError: " + e.message
 }
 
 func (e *FolderNotFoundError) Is(target error) bool {
@@ -69,7 +69,7 @@ type RepositoryNotFoundError struct {
 }
 
 func (e *RepositoryNotFoundError) Error() string {
-	return "repositoryNotFoundError: " + e.message
+	return "RepositoryNotFoundError: " + e.message
 }
 
 func (e *RepositoryNotFoundError) Is(target error) bool {

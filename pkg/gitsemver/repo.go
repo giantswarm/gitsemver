@@ -2,6 +2,7 @@ package gitsemver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-errors/errors"
 	billy "github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/osfs"
 	git "github.com/go-git/go-git/v5"
@@ -24,8 +24,11 @@ import (
 	"github.com/go-git/go-git/v5/storage/filesystem"
 )
 
-var tagRegex = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+`)
-var stableTagRegex = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
+// tagRegex and stableTagRegex reuse numID (from validate.go) so that the
+// no-leading-zeros rule (semver §2) is enforced consistently with
+// semverParseRegex in next.go.
+var tagRegex = regexp.MustCompile(`^v` + numID + `\.` + numID + `\.` + numID + `(-rc\.` + numID + `)?$`)
+var stableTagRegex = regexp.MustCompile(`^v` + numID + `\.` + numID + `\.` + numID + `$`)
 
 var tagPrefixEnvVarName = "GS_GIT_TAG_PREFIX"
 var prefixedTagRegex = regexp.MustCompile(`^[a-zA-Z0-9-_]+/v[0-9]+\.[0-9]+\.[0-9]+`)
@@ -95,12 +98,10 @@ func New(config Config) (*Repo, error) {
 	}
 
 	var auth transport.AuthMethod
-	{
-		if config.AuthBasicToken != "" {
-			auth = &http.BasicAuth{
-				Username: "can-be-anything-but-not-empty",
-				Password: config.AuthBasicToken,
-			}
+	if config.AuthBasicToken != "" {
+		auth = &http.BasicAuth{
+			Username: "can-be-anything-but-not-empty",
+			Password: config.AuthBasicToken,
 		}
 	}
 
@@ -225,14 +226,14 @@ func (r *Repo) HeadSHA(ctx context.Context) (string, error) {
 
 // HeadTag returns tag for the HEAD ref.
 //
-// If GS_TAG_PREFIX environment variable is set, it looks for tags prefixed with that.
+// If GS_GIT_TAG_PREFIX environment variable is set, it looks for tags prefixed with that.
 // For example, when the value is 'module-a', it filters found tags to 'module-a/v1.2.0',
 // must match <module_name>/v<semantic_version>.
 //
-// Note: if GS_TAG_PREFIX is not set, all tags matching the prefixed tag regex are filtered out!
+// Note: if GS_GIT_TAG_PREFIX is not set, all tags matching the prefixed tag regex are filtered out!
 //
-// It returns error handled by IsReferenceNotFound if the HEAD ref is not
-// tagged.
+// It returns a *ReferenceNotFoundError when the HEAD ref is not tagged,
+// detectable via errors.Is(err, &ReferenceNotFoundError{}).
 func (r *Repo) HeadTag(ctx context.Context) (string, error) {
 	repo, err := git.Open(r.storage, r.worktree)
 	if err != nil {
@@ -278,6 +279,44 @@ func (r *Repo) HeadTag(ctx context.Context) (string, error) {
 	return filteredTags[0], nil
 }
 
+// buildVersionMaps filters tagsByHash by tagPrefix and returns two maps keyed
+// by commit SHA: versionsByHash (all semver tags) and stableVersionsByHash
+// (stable-only tags). Version strings in both maps have no leading "v".
+// It returns an error if a single commit carries more than one version tag.
+func buildVersionMaps(tagsByHash map[string][]string, tagPrefix string) (versionsByHash, stableVersionsByHash map[string]string, err error) {
+	versionsByHash = map[string]string{}
+	stableVersionsByHash = map[string]string{}
+	for hash, tags := range tagsByHash {
+		var versionTags []string
+		for _, t := range tags {
+			if tagPrefix != "" {
+				if prefixedTagRegex.MatchString(t) && strings.HasPrefix(t, tagPrefix+"/") {
+					versionTags = append(versionTags, t)
+					version := strings.TrimPrefix(strings.TrimPrefix(t, tagPrefix+"/"), "v")
+					versionsByHash[hash] = version
+					tagWithoutPrefix := strings.TrimPrefix(t, tagPrefix+"/")
+					if stableTagRegex.MatchString(tagWithoutPrefix) {
+						stableVersionsByHash[hash] = version
+					}
+				}
+			} else {
+				if tagRegex.MatchString(t) {
+					versionTags = append(versionTags, t)
+					version := strings.TrimPrefix(t, "v")
+					versionsByHash[hash] = version
+					if stableTagRegex.MatchString(t) {
+						stableVersionsByHash[hash] = version
+					}
+				}
+			}
+		}
+		if len(versionTags) > 1 {
+			return nil, nil, &ExecutionFailedError{message: fmt.Sprintf("multiple version tags %#v found for hash %#q", versionTags, hash)}
+		}
+	}
+	return versionsByHash, stableVersionsByHash, nil
+}
+
 // ResolveVersion resolves the version for a git reference:
 //
 //   - Stable tag vX.Y.Z on the commit → returns "X.Y.Z"
@@ -292,7 +331,8 @@ func (r *Repo) HeadTag(ctx context.Context) (string, error) {
 // If GS_GIT_TAG_PREFIX is set, only tags prefixed with "<value>/" are considered,
 // e.g. "module-a/v1.2.3". The prefix, separator, and "v" are stripped from the result.
 //
-// It returns an error handled by IsReferenceNotFound if the reference cannot be resolved.
+// It returns a *ReferenceNotFoundError when the reference cannot be resolved,
+// detectable via errors.Is(err, &ReferenceNotFoundError{}).
 func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 	repo, err := git.Open(r.storage, r.worktree)
 	if err != nil {
@@ -301,68 +341,30 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 
 	tagPrefix := os.Getenv(tagPrefixEnvVarName)
 
-	versionsByHash := map[string]string{}
-	stableVersionsByHash := map[string]string{}
-	{
-
-		tagsByHash, err := r.tags(repo)
-		if err != nil {
-			return "", err
-		}
-		for hash, tags := range tagsByHash {
-			for _, t := range tags {
-				var versionTags []string
-
-				if tagPrefix != "" {
-					if prefixedTagRegex.MatchString(t) && strings.HasPrefix(t, tagPrefix+"/") {
-						versionTags = append(versionTags, t)
-						version := strings.TrimPrefix(strings.TrimPrefix(t, tagPrefix+"/"), "v")
-						versionsByHash[hash] = version
-						tagWithoutPrefix := strings.TrimPrefix(t, tagPrefix+"/")
-						if stableTagRegex.MatchString(tagWithoutPrefix) {
-							stableVersionsByHash[hash] = version
-						}
-					}
-				} else {
-					if tagRegex.MatchString(t) {
-						versionTags = append(versionTags, t)
-						version := strings.TrimPrefix(t, "v")
-						versionsByHash[hash] = version
-						if stableTagRegex.MatchString(t) {
-							stableVersionsByHash[hash] = version
-						}
-					}
-				}
-
-				if len(versionTags) > 1 {
-					return "", &ExecutionFailedError{message: fmt.Sprintf("multiple version tags %#v found for hash %#q", versionTags, hash)}
-				}
-			}
-		}
-
+	tagsByHash, err := r.tags(repo)
+	if err != nil {
+		return "", err
+	}
+	versionsByHash, stableVersionsByHash, err := buildVersionMaps(tagsByHash, tagPrefix)
+	if err != nil {
+		return "", err
 	}
 
 	var commit *object.Commit
-	{
-		hash, err := repo.ResolveRevision(plumbing.Revision(ref))
-		if errors.Is(err, plumbing.ErrReferenceNotFound) {
-			return "", &ReferenceNotFoundError{message: fmt.Sprintf("%#q", ref)}
-		} else if err != nil {
-			return "", err
-		}
-
-		commit, err = repo.CommitObject(*hash)
-		if err != nil {
-			return "", err
-		}
+	hash, err := repo.ResolveRevision(plumbing.Revision(ref))
+	if errors.Is(err, plumbing.ErrReferenceNotFound) {
+		return "", &ReferenceNotFoundError{message: fmt.Sprintf("%#q", ref)}
+	} else if err != nil {
+		return "", err
+	}
+	commit, err = repo.CommitObject(*hash)
+	if err != nil {
+		return "", err
 	}
 
 	// When the commit is tagged return the tag.
-	{
-		version, ok := versionsByHash[commit.Hash.String()]
-		if ok {
-			return version, nil
-		}
+	if version, ok := versionsByHash[commit.Hash.String()]; ok {
+		return version, nil
 	}
 
 	// Otherwise walk ancestors to find the most recent stable tagged parent,
@@ -370,78 +372,153 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 	// The queue only ever holds commits reachable from `commit` (parents of parents,
 	// etc.), so stableVersionsByHash is only consulted for actual ancestors — tags
 	// on unrelated branches are never returned.
-	var pseudoVersion string
-	{
-		var lastStableVersion string
+	var lastStableVersion string
 
-		queue := []*object.Commit{
-			commit,
-		}
-
-		for len(queue) > 0 {
-			// Pop the first element from the queue.
-			c := queue[0]
-			queue = queue[1:]
-
-			// Check if this commit has a stable tag. RC and other pre-release
-			// tags are intentionally skipped so the dev build base is always
-			// derived from the last stable release.
-			v, ok := stableVersionsByHash[c.Hash.String()]
-			if ok {
-				lastStableVersion = v
-				break
-			}
-
-			// Push all the parents to the queue.
-			err = c.Parents().ForEach(func(p *object.Commit) error {
-				// If the commit is already in the queue skip
-				// it. This is possible multiple commits have
-				// the same parent. Adding all of them to the
-				// queue may lead in exponential growth of the
-				// queue resulting in extremely long execution.
-				for _, c := range queue {
-					if c.Hash == p.Hash {
-						return nil
-					}
-				}
-
-				queue = append(queue, p)
-				return nil
-			})
-			if err != nil {
-				return "", err
-			}
-
-			// Sort commits in the queue by commit date in
-			// descending order to find the most recent tag first.
-			sort.Slice(queue, func(i, j int) bool { return queue[i].Committer.When.After(queue[j].Committer.When) })
-		}
-
-		var base string
-		if lastStableVersion == "" {
-			base = "0.0.0"
-		} else {
-			base, err = incrementPatch(lastStableVersion)
-			if err != nil {
-				return "", err
-			}
-		}
-		branch := sanitizeBranchName(currentBranch())
-		t := nowFunc().UTC()
-		pseudoVersion = fmt.Sprintf("%s-dev.%s.%s.%s",
-			base,
-			branch,
-			t.Format("2006-01-02"),
-			t.Format("15-04-05"),
-		)
+	queue := []*object.Commit{
+		commit,
 	}
+
+	for len(queue) > 0 {
+		// Pop the first element from the queue.
+		c := queue[0]
+		queue = queue[1:]
+
+		// Check if this commit has a stable tag. RC and other pre-release
+		// tags are intentionally skipped so the dev build base is always
+		// derived from the last stable release.
+		v, ok := stableVersionsByHash[c.Hash.String()]
+		if ok {
+			lastStableVersion = v
+			break
+		}
+
+		// Push all the parents to the queue.
+		err = c.Parents().ForEach(func(p *object.Commit) error {
+			// If the commit is already in the queue skip
+			// it. This is possible multiple commits have
+			// the same parent. Adding all of them to the
+			// queue may lead in exponential growth of the
+			// queue resulting in extremely long execution.
+			for _, c := range queue {
+				if c.Hash == p.Hash {
+					return nil
+				}
+			}
+
+			queue = append(queue, p)
+			return nil
+		})
+		if err != nil {
+			return "", err
+		}
+
+		// Sort commits in the queue by commit date in
+		// descending order to find the most recent tag first.
+		sort.Slice(queue, func(i, j int) bool { return queue[i].Committer.When.After(queue[j].Committer.When) })
+	}
+
+	var base string
+	if lastStableVersion == "" {
+		base = "0.0.0"
+	} else {
+		base, err = incrementPatch(lastStableVersion)
+		if err != nil {
+			return "", err
+		}
+	}
+	branch := sanitizeBranchName(currentBranch())
+	t := nowFunc().UTC()
+	pseudoVersion := fmt.Sprintf("%s-dev.%s.%s.%s",
+		base,
+		branch,
+		t.Format("2006-01-02"),
+		t.Format("15-04-05"),
+	)
 
 	return pseudoVersion, nil
 }
 
-// GetFileContent retrieves content of file stored at path on version specified in ref.
+// NextVersion returns the next version tag after the highest-semver tag
+// reachable from HEAD for the given bumpType.
+//
+// Valid bump types from a stable tag: patch, minor, major, patch-rc, minor-rc, major-rc.
+// Valid bump types from an RC tag: rc (bump counter), rc-release (finalize to stable).
+//
+// When no version tags are reachable from HEAD, v0.0.0 is used as the implicit base,
+// which means only the stable bump types (patch/minor/major/patch-rc/minor-rc/major-rc)
+// are valid.
+//
+// The returned string never carries a leading "v". If GS_GIT_TAG_PREFIX is set,
+// only tags carrying that prefix are considered (monorepo support).
+func (r *Repo) NextVersion(ctx context.Context, bumpType string) (string, error) {
+	repo, err := git.Open(r.storage, r.worktree)
+	if err != nil {
+		return "", err
+	}
+
+	tagPrefix := os.Getenv(tagPrefixEnvVarName)
+
+	tagsByHash, err := r.tags(repo)
+	if err != nil {
+		return "", err
+	}
+	versionsByHash, _, err := buildVersionMaps(tagsByHash, tagPrefix)
+	if err != nil {
+		return "", err
+	}
+
+	head, err := repo.Head()
+	if err != nil {
+		if errors.Is(err, plumbing.ErrReferenceNotFound) {
+			return "", &ReferenceNotFoundError{message: "HEAD"}
+		}
+		return "", err
+	}
+
+	// Walk every commit reachable from HEAD and find the highest-semver tagged one.
+	var best *parsedVersion
+	var bestStr string
+
+	iter, err := repo.Log(&git.LogOptions{From: head.Hash()})
+	if err != nil {
+		return "", err
+	}
+	defer iter.Close()
+	err = iter.ForEach(func(c *object.Commit) error {
+		v, ok := versionsByHash[c.Hash.String()]
+		if !ok {
+			return nil
+		}
+		pv, parseErr := parseVersionString(v)
+		if parseErr != nil {
+			return nil // skip any tag that can't be parsed as semver
+		}
+		if best == nil || compareSemver(pv, *best) > 0 {
+			best = &pv
+			bestStr = v
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if bestStr == "" && (bumpType == "rc" || bumpType == "rc-release") {
+		return "", &ExecutionFailedError{message: "no version tag reachable from HEAD; use patch, minor, major, patch-rc, minor-rc, or major-rc to start from 0.0.0"}
+	}
+
+	lastTag := "v0.0.0"
+	if bestStr != "" {
+		lastTag = bestStr
+	}
+
+	return ComputeNextVersion(lastTag, bumpType)
+}
+
+// ReadFileAtRef retrieves content of file stored at path on version specified in ref.
 // When empty ref defaults to master branch.
-func (r *Repo) GetFileContent(path, ref string) ([]byte, error) {
+// Note: internally this checks out the given ref, mutating the working tree.
+func (r *Repo) ReadFileAtRef(ctx context.Context, path, ref string) ([]byte, error) {
 	worktree, err := r.checkoutRef(ref)
 	if err != nil {
 		return nil, err
@@ -462,9 +539,10 @@ func (r *Repo) GetFileContent(path, ref string) ([]byte, error) {
 	return content, nil
 }
 
-// GetFolderContent retrieves content of a folder stored at path on version specified in ref.
+// ReadFolderAtRef retrieves content of a folder stored at path on version specified in ref.
 // When empty ref defaults to master branch.
-func (r *Repo) GetFolderContent(path, ref string) ([]os.FileInfo, error) {
+// Note: internally this checks out the given ref, mutating the working tree.
+func (r *Repo) ReadFolderAtRef(ctx context.Context, path, ref string) ([]os.FileInfo, error) {
 	worktree, err := r.checkoutRef(ref)
 	if err != nil {
 		return nil, err
@@ -539,14 +617,7 @@ func (r *Repo) tags(repo *git.Repository) (map[string][]string, error) {
 		defer tagsIter.Close()
 
 		err = tagsIter.ForEach(func(tag *plumbing.Reference) error {
-			v := tags[tag.Hash().String()]
-			if v == nil {
-				v = []string{}
-			}
-			v = append(v, tag.Name().Short())
-
-			tags[tag.Hash().String()] = v
-
+			tags[tag.Hash().String()] = append(tags[tag.Hash().String()], tag.Name().Short())
 			return nil
 		})
 		if err != nil {
@@ -567,15 +638,7 @@ func (r *Repo) tags(repo *git.Repository) (map[string][]string, error) {
 			if err != nil {
 				return err
 			}
-
-			v := tags[commit.Hash.String()]
-			if v == nil {
-				v = []string{}
-			}
-			v = append(v, tag.Name)
-
-			tags[commit.Hash.String()] = v
-
+			tags[commit.Hash.String()] = append(tags[commit.Hash.String()], tag.Name)
 			return nil
 		})
 		if err != nil {

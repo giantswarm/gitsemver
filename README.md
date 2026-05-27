@@ -30,21 +30,62 @@ go install github.com/giantswarm/gitsemver@latest
 ```
 
 ```
-Usage: gitsemver [flags]
-
-  -dir string   path inside the git repository (default ".", resolved to repo root)
-  -ref string   git ref to resolve: branch name, tag, or commit SHA (default "HEAD")
+Usage:
+  gitsemver version [--dir <path>] [--ref <ref>]
+  gitsemver next <patch|minor|major|patch-rc|minor-rc|major-rc|rc|rc-release> [--last-tag <tag>]
+  gitsemver validate [--type dev|rc|stable|any] <version>
 ```
 
-Example — print the version for the current working tree:
+### version
+
+Print the version for a git ref:
+
+```
+  --dir string   path inside the git repository (default ".", resolved to repo root)
+  --ref string   git ref to resolve: branch name, tag, or commit SHA (default "HEAD")
+```
 
 ```sh
-$ GS_BRANCH_NAME=my-feature gitsemver
+$ GS_BRANCH_NAME=my-feature gitsemver version
 1.2.4-dev.my-feature.2026-01-27.09-49-59
 
-$ gitsemver --ref v1.2.3
+$ gitsemver version --ref v1.2.3
 1.2.3
 ```
+
+### next
+
+Compute the next semver release tag after the highest-semver tag reachable from HEAD:
+
+```sh
+$ gitsemver next patch          # v1.2.3 ancestor → prints 1.2.4
+$ gitsemver next minor-rc       # v1.2.3 ancestor → prints 1.3.0-rc.1
+$ gitsemver next rc             # v1.3.0-rc.1 ancestor → prints 1.3.0-rc.2
+$ gitsemver next rc-release     # v1.3.0-rc.1 ancestor → prints 1.3.0
+```
+
+Use `--last-tag` to supply the base explicitly — no git repository needed:
+
+```sh
+$ gitsemver next patch --last-tag v1.2.3
+1.2.4
+```
+
+Valid bump types:
+
+| Base tag | Bump type | Result |
+|---|---|---|
+| Stable `X.Y.Z` | `patch` | `X.Y.Z+1` |
+| Stable `X.Y.Z` | `minor` | `X.Y+1.0` |
+| Stable `X.Y.Z` | `major` | `X+1.0.0` |
+| Stable `X.Y.Z` | `patch-rc` | `X.Y.Z+1-rc.1` |
+| Stable `X.Y.Z` | `minor-rc` | `X.Y+1.0-rc.1` |
+| Stable `X.Y.Z` | `major-rc` | `X+1.0.0-rc.1` |
+| RC `X.Y.Z-rc.N` | `rc` | `X.Y.Z-rc.N+1` |
+| RC `X.Y.Z-rc.N` | `rc-release` | `X.Y.Z` |
+
+When no version tag is reachable from HEAD, `0.0.0` is used as the base.
+Note: `rc` and `rc-release` require an actual reachable RC tag and cannot be used from the implicit `0.0.0` base — start a new RC series with `patch-rc`, `minor-rc`, or `major-rc` instead.
 
 ## Go library
 
