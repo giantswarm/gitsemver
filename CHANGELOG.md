@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Shell completion scripts for bash, zsh, fish, and PowerShell via `gitsemver completion <shell>`.
+  Bump types for `next` and type values for `validate --type` are completed automatically.
+
 ## [1.1.0] - 2026-05-27
 
 ### Added
