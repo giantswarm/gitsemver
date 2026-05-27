@@ -54,10 +54,20 @@ import (
 // should print "invalid" and exit 1.
 var errInvalidVersion = errors.New("invalid")
 
-var validBumpTypes = []string{
-	gitsemver.BumpTypePatch, gitsemver.BumpTypeMinor, gitsemver.BumpTypeMajor,
-	gitsemver.BumpTypePatchRC, gitsemver.BumpTypeMinorRC, gitsemver.BumpTypeMajorRC,
-	gitsemver.BumpTypeRC, gitsemver.BumpTypeRCRelease,
+// usageError marks errors that should exit 2 (bad invocation) rather than exit 1 (runtime failure).
+type usageError struct{ cause error }
+
+func (e *usageError) Error() string { return e.cause.Error() }
+func (e *usageError) Unwrap() error { return e.cause }
+
+// usageArgs wraps a cobra PositionalArgs validator so failures exit 2.
+func usageArgs(f cobra.PositionalArgs) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if err := f(cmd, args); err != nil {
+			return &usageError{err}
+		}
+		return nil
+	}
 }
 
 func main() {
@@ -67,6 +77,11 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		var uErr *usageError
+		// cobra returns "unknown command" as a plain error (not typed), so check the prefix too.
+		if errors.As(err, &uErr) || strings.HasPrefix(err.Error(), "unknown command ") {
+			os.Exit(2)
+		}
 		os.Exit(1)
 	}
 }
@@ -77,7 +92,13 @@ func newRootCmd() *cobra.Command {
 		Short:         "Print or validate semVer-compatible version strings for git refs.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return &usageError{fmt.Errorf("subcommand required; run 'gitsemver --help' for usage")}
+		},
 	}
+	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		return &usageError{err}
+	})
 	root.AddCommand(newVersionCmd(), newNextCmd(), newValidateCmd())
 	return root
 }
@@ -87,7 +108,7 @@ func newVersionCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Resolve and print the semver version for a git ref.",
-		Args:  cobra.NoArgs,
+		Args:  usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runVersion(dir, ref)
 		},
@@ -102,8 +123,8 @@ func newNextCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:       "next <bump-type>",
 		Short:     "Compute the next semver tag after the last tag reachable from HEAD.",
-		Args:      cobra.ExactArgs(1),
-		ValidArgs: validBumpTypes,
+		Args:      usageArgs(cobra.ExactArgs(1)),
+		ValidArgs: gitsemver.ValidBumpTypes,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runNext(args[0], lastTag)
 		},
@@ -117,7 +138,7 @@ func newValidateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate <version>",
 		Short: "Check whether a version string matches a known format. Exits 0 on success, 1 otherwise.",
-		Args:  cobra.ExactArgs(1),
+		Args:  usageArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runValidate(typFlag, args[0])
 		},
@@ -168,10 +189,11 @@ func openRepo(topLevel string) (*gitsemver.Repo, error) {
 }
 
 func runNext(bumpType, lastTag string) error {
-	if !slices.Contains(validBumpTypes, bumpType) {
-		return fmt.Errorf("unknown bump type %q: must be one of %s", bumpType, strings.Join(validBumpTypes, ", "))
+	if !slices.Contains(gitsemver.ValidBumpTypes, bumpType) {
+		return fmt.Errorf("unknown bump type %q: must be one of %s", bumpType, strings.Join(gitsemver.ValidBumpTypes, ", "))
 	}
 
+	lastTag = strings.TrimSpace(lastTag)
 	if lastTag != "" {
 		tag := lastTag
 		if prefix := strings.TrimSpace(os.Getenv("GS_GIT_TAG_PREFIX")); prefix != "" {
