@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 // Bump type constants for use with ComputeNextVersion and NextVersion.
@@ -17,6 +18,13 @@ const (
 	BumpTypeRC        = "rc"
 	BumpTypeRCRelease = "rc-release"
 )
+
+// ValidBumpTypes lists all accepted bump-type values in their canonical order.
+var ValidBumpTypes = []string{
+	BumpTypePatch, BumpTypeMinor, BumpTypeMajor,
+	BumpTypePatchRC, BumpTypeMinorRC, BumpTypeMajorRC,
+	BumpTypeRC, BumpTypeRCRelease,
+}
 
 // parsedVersion holds the numeric components of a semver string.
 type parsedVersion struct {
@@ -161,7 +169,7 @@ func ComputeNextVersion(lastTag, bumpType string) (string, error) {
 		return fmt.Sprintf("%d.%d.%d", pv.major, pv.minor, pv.patch), nil
 	}
 	return "", &ExecutionFailedError{message: fmt.Sprintf(
-		"unknown bump type %q: must be one of patch, minor, major, patch-rc, minor-rc, major-rc, rc, rc-release",
-		bumpType,
+		"unknown bump type %q: must be one of %s",
+		bumpType, strings.Join(ValidBumpTypes, ", "),
 	)}
 }

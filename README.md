@@ -34,6 +34,7 @@ Usage:
   gitsemver version [--dir <path>] [--ref <ref>]
   gitsemver next <patch|minor|major|patch-rc|minor-rc|major-rc|rc|rc-release> [--last-tag <tag>]
   gitsemver validate [--type dev|rc|stable|any] <version>
+  gitsemver completion <bash|zsh|fish|powershell>
 ```
 
 ### version
@@ -86,6 +87,26 @@ Valid bump types:
 
 When no version tag is reachable from HEAD, `0.0.0` is used as the base.
 Note: `rc` and `rc-release` require an actual reachable RC tag and cannot be used from the implicit `0.0.0` base — start a new RC series with `patch-rc`, `minor-rc`, or `major-rc` instead.
+
+### Shell completion
+
+Generate and load a completion script for your shell:
+
+```sh
+# bash — add to ~/.bashrc
+source <(gitsemver completion bash)
+
+# zsh — add to ~/.zshrc (requires compinit to be loaded)
+source <(gitsemver completion zsh)
+
+# fish
+gitsemver completion fish | source
+
+# PowerShell — add to $PROFILE
+gitsemver completion powershell | Out-String | Invoke-Expression
+```
+
+Once loaded, `gitsemver next <TAB>` completes bump types and `gitsemver validate --type <TAB>` completes version types.
 
 ## Go library
 

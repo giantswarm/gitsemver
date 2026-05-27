@@ -39,11 +39,12 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
-	"io"
 	"os"
+	"slices"
 	"strings"
+
+	"github.com/spf13/cobra"
 
 	"github.com/giantswarm/gitsemver/pkg/gitsemver"
 )
@@ -53,77 +54,100 @@ import (
 // should print "invalid" and exit 1.
 var errInvalidVersion = errors.New("invalid")
 
+// usageError marks errors that should exit 2 (bad invocation) rather than exit 1 (runtime failure).
+type usageError struct{ cause error }
+
+func (e *usageError) Error() string { return e.cause.Error() }
+func (e *usageError) Unwrap() error { return e.cause }
+
+// usageArgs wraps a cobra PositionalArgs validator so failures exit 2.
+func usageArgs(f cobra.PositionalArgs) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if err := f(cmd, args); err != nil {
+			return &usageError{err}
+		}
+		return nil
+	}
+}
+
 func main() {
-	usage := func() {
-		_, _ = fmt.Fprintf(os.Stderr, `Usage:
-  gitsemver version [--dir <path>] [--ref <ref>]
-  gitsemver next <patch|minor|major|patch-rc|minor-rc|major-rc|rc|rc-release> [--last-tag <tag>]
-  gitsemver validate [--type dev|rc|stable|any] <version>
-
-Subcommands:
-  version     Resolve and print the semver version for a git ref.
-  next        Compute the next semver tag after the last tag reachable from HEAD.
-              Bump types from a stable tag: patch, minor, major, patch-rc, minor-rc, major-rc.
-              Bump types from an RC tag:    rc (bump counter), rc-release (finalize to stable).
-              Use --last-tag to supply the base tag explicitly (no git repo needed).
-  validate    Check whether a version string matches a known format.
-              Exits 0 and prints "valid" on success, 1 and "invalid" otherwise.
-`)
-	}
-
-	sub := ""
-	if len(os.Args) >= 2 {
-		sub = os.Args[1]
-	}
-
-	switch sub {
-	case "version":
-		fs := flag.NewFlagSet("version", flag.ContinueOnError)
-		fs.SetOutput(io.Discard)
-		dir := fs.String("dir", ".", "path inside the git repository (resolved to the repo root)")
-		ref := fs.String("ref", "HEAD", "git ref to resolve: branch name, tag, or commit SHA")
-		if err := fs.Parse(os.Args[2:]); err != nil {
-			if errors.Is(err, flag.ErrHelp) {
-				os.Exit(0)
-			}
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(2)
-		}
-		if fs.NArg() > 0 {
-			fmt.Fprintf(os.Stderr, "error: unexpected argument %q\n", fs.Arg(0))
-			os.Exit(2)
-		}
-		if err := runVersion(*dir, *ref); err != nil {
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	if err := newRootCmd().Execute(); err != nil {
+		if errors.Is(err, errInvalidVersion) {
+			fmt.Println("invalid")
 			os.Exit(1)
 		}
-	case "next":
-		if err := runNext(os.Args[2:]); err != nil {
-			switch {
-			case errors.Is(err, flag.ErrHelp):
-				os.Exit(0)
-			default:
-				fmt.Fprintf(os.Stderr, "error: %v\n", err)
-				os.Exit(1)
-			}
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		var uErr *usageError
+		// cobra returns "unknown command" as a plain error (not typed), so check the prefix too.
+		if errors.As(err, &uErr) || strings.HasPrefix(err.Error(), "unknown command ") {
+			os.Exit(2)
 		}
-	case "validate":
-		if err := runValidate(os.Args[2:]); err != nil {
-			switch {
-			case errors.Is(err, flag.ErrHelp):
-				os.Exit(0)
-			case errors.Is(err, errInvalidVersion):
-				fmt.Println("invalid")
-				os.Exit(1)
-			default:
-				fmt.Fprintf(os.Stderr, "error: %v\n", err)
-				os.Exit(2)
-			}
-		}
-	default:
-		usage()
-		os.Exit(2)
+		os.Exit(1)
 	}
+}
+
+func newRootCmd() *cobra.Command {
+	root := &cobra.Command{
+		Use:           "gitsemver",
+		Short:         "Print or validate semVer-compatible version strings for git refs.",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return &usageError{fmt.Errorf("subcommand required; run 'gitsemver --help' for usage")}
+		},
+	}
+	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		return &usageError{err}
+	})
+	root.AddCommand(newVersionCmd(), newNextCmd(), newValidateCmd())
+	return root
+}
+
+func newVersionCmd() *cobra.Command {
+	var dir, ref string
+	cmd := &cobra.Command{
+		Use:   "version",
+		Short: "Resolve and print the semver version for a git ref.",
+		Args:  usageArgs(cobra.NoArgs),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runVersion(dir, ref)
+		},
+	}
+	cmd.Flags().StringVar(&dir, "dir", ".", "path inside the git repository (resolved to the repo root)")
+	cmd.Flags().StringVar(&ref, "ref", "HEAD", "git ref to resolve: branch name, tag, or commit SHA")
+	return cmd
+}
+
+func newNextCmd() *cobra.Command {
+	var lastTag string
+	cmd := &cobra.Command{
+		Use:       "next <bump-type>",
+		Short:     "Compute the next semver tag after the last tag reachable from HEAD.",
+		Args:      usageArgs(cobra.ExactArgs(1)),
+		ValidArgs: gitsemver.ValidBumpTypes,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runNext(args[0], lastTag)
+		},
+	}
+	cmd.Flags().StringVar(&lastTag, "last-tag", "", "base tag to compute from; when set, no git repo is needed")
+	return cmd
+}
+
+func newValidateCmd() *cobra.Command {
+	var typFlag string
+	cmd := &cobra.Command{
+		Use:   "validate <version>",
+		Short: "Check whether a version string matches a known format. Exits 0 on success, 1 otherwise.",
+		Args:  usageArgs(cobra.ExactArgs(1)),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runValidate(typFlag, args[0])
+		},
+	}
+	cmd.Flags().StringVar(&typFlag, "type", "any", "version type to validate: dev, rc, stable, or any")
+	_ = cmd.RegisterFlagCompletionFunc("type", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return []string{"dev", "rc", "stable", "any"}, cobra.ShellCompDirectiveNoFileComp
+	})
+	return cmd
 }
 
 func runVersion(dir, ref string) error {
@@ -164,49 +188,14 @@ func openRepo(topLevel string) (*gitsemver.Repo, error) {
 	return repo, nil
 }
 
-// validBumpTypes lists all accepted values for the "next" bump type argument.
-var validBumpTypes = map[string]bool{
-	gitsemver.BumpTypePatch: true, gitsemver.BumpTypeMinor: true, gitsemver.BumpTypeMajor: true,
-	gitsemver.BumpTypePatchRC: true, gitsemver.BumpTypeMinorRC: true, gitsemver.BumpTypeMajorRC: true,
-	gitsemver.BumpTypeRC: true, gitsemver.BumpTypeRCRelease: true,
-}
-
-func runNext(args []string) error {
-	fs := flag.NewFlagSet("next", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	lastTag := fs.String("last-tag", "", "base tag to compute from; when set, no git repo is needed")
-
-	// Extract the bump type by value before flag parsing so that both
-	//   gitsemver next patch --last-tag v1.2.3
-	//   gitsemver next --last-tag v1.2.3 patch
-	// are accepted.
-	var bumpType string
-	var flagArgs []string
-	var prevArg string
-	for _, a := range args {
-		prevIsLastTagFlag := prevArg == "--last-tag" || prevArg == "-last-tag"
-		if validBumpTypes[a] && bumpType == "" && !prevIsLastTagFlag {
-			bumpType = a
-		} else {
-			flagArgs = append(flagArgs, a)
-		}
-		prevArg = a
+func runNext(bumpType, lastTag string) error {
+	if !slices.Contains(gitsemver.ValidBumpTypes, bumpType) {
+		return fmt.Errorf("unknown bump type %q: must be one of %s", bumpType, strings.Join(gitsemver.ValidBumpTypes, ", "))
 	}
 
-	if err := fs.Parse(flagArgs); err != nil {
-		return err
-	}
-	switch {
-	case bumpType == "" && fs.NArg() > 0:
-		return fmt.Errorf("unknown bump type %q: must be one of patch, minor, major, patch-rc, minor-rc, major-rc, rc, rc-release", fs.Arg(0))
-	case bumpType == "":
-		return fmt.Errorf("next requires exactly one bump type argument\nusage: gitsemver next <patch|minor|major|patch-rc|minor-rc|major-rc|rc|rc-release> [--last-tag <tag>]")
-	case fs.NArg() > 0:
-		return fmt.Errorf("unexpected argument %q", fs.Arg(0))
-	}
-
-	if *lastTag != "" {
-		tag := *lastTag
+	lastTag = strings.TrimSpace(lastTag)
+	if lastTag != "" {
+		tag := lastTag
 		if prefix := strings.TrimSpace(os.Getenv("GS_GIT_TAG_PREFIX")); prefix != "" {
 			tag = strings.TrimPrefix(tag, prefix+"/")
 		}
@@ -239,22 +228,9 @@ func runNext(args []string) error {
 	return nil
 }
 
-func runValidate(args []string) error {
-	fs := flag.NewFlagSet("validate", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	typFlag := fs.String("type", "any", "version type to validate: dev, rc, stable, or any")
-
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
-	if fs.NArg() != 1 {
-		return fmt.Errorf("validate requires exactly one version argument\nusage: gitsemver validate [--type dev|rc|stable|any] <version>")
-	}
-	version := fs.Arg(0)
-
+func runValidate(typFlag, version string) error {
 	var ok bool
-	switch *typFlag {
+	switch typFlag {
 	case "stable":
 		ok = gitsemver.IsValidStable(version)
 	case "rc":
@@ -264,7 +240,7 @@ func runValidate(args []string) error {
 	case "any":
 		ok = gitsemver.IsValid(version)
 	default:
-		return fmt.Errorf("unknown --type %q: must be dev, rc, stable, or any", *typFlag)
+		return fmt.Errorf("unknown --type %q: must be dev, rc, stable, or any", typFlag)
 	}
 
 	if ok {
