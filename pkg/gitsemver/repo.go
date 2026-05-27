@@ -24,8 +24,11 @@ import (
 	"github.com/go-git/go-git/v5/storage/filesystem"
 )
 
-var tagRegex = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$`)
-var stableTagRegex = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
+// tagRegex and stableTagRegex reuse numID (from validate.go) so that the
+// no-leading-zeros rule (semver §2) is enforced consistently with
+// semverParseRegex in next.go.
+var tagRegex = regexp.MustCompile(`^v` + numID + `\.` + numID + `\.` + numID + `(-rc\.` + numID + `)?$`)
+var stableTagRegex = regexp.MustCompile(`^v` + numID + `\.` + numID + `\.` + numID + `$`)
 
 var tagPrefixEnvVarName = "GS_GIT_TAG_PREFIX"
 var prefixedTagRegex = regexp.MustCompile(`^[a-zA-Z0-9-_]+/v[0-9]+\.[0-9]+\.[0-9]+`)
@@ -515,7 +518,7 @@ func (r *Repo) NextVersion(ctx context.Context, bumpType string) (string, error)
 // ReadFileAtRef retrieves content of file stored at path on version specified in ref.
 // When empty ref defaults to master branch.
 // Note: internally this checks out the given ref, mutating the working tree.
-func (r *Repo) ReadFileAtRef(_ context.Context, path, ref string) ([]byte, error) {
+func (r *Repo) ReadFileAtRef(ctx context.Context, path, ref string) ([]byte, error) {
 	worktree, err := r.checkoutRef(ref)
 	if err != nil {
 		return nil, err
@@ -539,7 +542,7 @@ func (r *Repo) ReadFileAtRef(_ context.Context, path, ref string) ([]byte, error
 // ReadFolderAtRef retrieves content of a folder stored at path on version specified in ref.
 // When empty ref defaults to master branch.
 // Note: internally this checks out the given ref, mutating the working tree.
-func (r *Repo) ReadFolderAtRef(_ context.Context, path, ref string) ([]os.FileInfo, error) {
+func (r *Repo) ReadFolderAtRef(ctx context.Context, path, ref string) ([]os.FileInfo, error) {
 	worktree, err := r.checkoutRef(ref)
 	if err != nil {
 		return nil, err

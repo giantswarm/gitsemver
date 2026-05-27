@@ -89,6 +89,10 @@ Subcommands:
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(2)
 		}
+		if fs.NArg() > 0 {
+			fmt.Fprintf(os.Stderr, "error: unexpected argument %q\n", fs.Arg(0))
+			os.Exit(2)
+		}
 		if err := runVersion(*dir, *ref); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)

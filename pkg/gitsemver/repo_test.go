@@ -944,8 +944,8 @@ func Test_Repo_ResolveVersion_multipleTagsOnSameCommit_errors(t *testing.T) {
 	}
 
 	_, err := repo.ResolveVersion(ctx, h.String())
-	execErr, ok := err.(*ExecutionFailedError)
-	if !ok {
+	var execErr *ExecutionFailedError
+	if !errors.As(err, &execErr) {
 		t.Fatalf("err = %T (%v), want *ExecutionFailedError", err, err)
 	}
 	if !strings.Contains(execErr.Error(), "multiple version tags") {
