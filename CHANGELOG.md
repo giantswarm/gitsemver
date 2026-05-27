@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-05-27
+
 ### Added
 
 - `gitsemver next <bump-type> [--last-tag <tag>]` subcommand that computes the next semver
@@ -143,7 +145,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - Functions signature for `EnsureUpToDate` and `ResolveVersion`.
 
-[Unreleased]: https://github.com/giantswarm/gitsemver/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/giantswarm/gitsemver/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/giantswarm/gitsemver/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/giantswarm/gitsemver/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/giantswarm/gitsemver/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/giantswarm/gitsemver/compare/v0.3.5...v1.0.0
