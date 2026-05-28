@@ -7,27 +7,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-05-28
+
+### Fixed
+
+- `--version` flag for `gitsemver` self-info was not working
+
 ## [1.1.1] - 2026-05-27
 
 ### Added
 
-- Shell completion scripts for bash, zsh, fish, and PowerShell via `gitsemver completion <shell>`.
-  Bump types for `next` and type values for `validate --type` are completed automatically.
+- Shell completion scripts for bash, zsh, fish, and PowerShell via `gitsemver completion <shell>`. Bump types
+  for `next` and type values for `validate --type` are completed automatically.
 
 ## [1.1.0] - 2026-05-27
 
 ### Added
 
-- `gitsemver next <bump-type> [--last-tag <tag>]` subcommand that computes the next semver
-  release tag from the highest-semver reachable ancestor tag (or an explicit `--last-tag` value).
-  Bump types from a stable tag: `patch`, `minor`, `major`, `patch-rc`, `minor-rc`, `major-rc`.
-  Bump types from an RC tag: `rc` (increment counter), `rc-release` (finalize to stable).
-  `--last-tag` bypasses git entirely, making the command usable outside a repository.
+- `gitsemver next <bump-type> [--last-tag <tag>]` subcommand that computes the next semver release tag from
+  the highest-semver reachable ancestor tag (or an explicit `--last-tag` value). Bump types from a stable tag:
+  `patch`, `minor`, `major`, `patch-rc`, `minor-rc`, `major-rc`. Bump types from an RC tag: `rc` (increment
+  counter), `rc-release` (finalize to stable). `--last-tag` bypasses git entirely, making the command usable
+  outside a repository.
 
 ### Fixed
 
-- Multiple version tags on the same commit now produce an error instead of silently
-  returning a non-deterministic result (`buildVersionMaps` guard was previously unreachable).
+- Multiple version tags on the same commit now produce an error instead of silently returning a
+  non-deterministic result (`buildVersionMaps` guard was previously unreachable).
 
 ## [1.0.2] - 2026-05-26
 
@@ -152,7 +158,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - Functions signature for `EnsureUpToDate` and `ResolveVersion`.
 
-[Unreleased]: https://github.com/giantswarm/gitsemver/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/giantswarm/gitsemver/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/giantswarm/gitsemver/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/giantswarm/gitsemver/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/giantswarm/gitsemver/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/giantswarm/gitsemver/compare/v1.0.1...v1.0.2
