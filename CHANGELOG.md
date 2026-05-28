@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-05-28
+
 ## [1.1.1] - 2026-05-27
 
 ### Added
@@ -152,7 +154,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - Functions signature for `EnsureUpToDate` and `ResolveVersion`.
 
-[Unreleased]: https://github.com/giantswarm/gitsemver/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/giantswarm/gitsemver/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/giantswarm/gitsemver/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/giantswarm/gitsemver/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/giantswarm/gitsemver/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/giantswarm/gitsemver/compare/v1.0.1...v1.0.2
