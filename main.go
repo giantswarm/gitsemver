@@ -47,6 +47,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/giantswarm/gitsemver/pkg/gitsemver"
+	"github.com/giantswarm/gitsemver/pkg/project"
 )
 
 // errInvalidVersion is returned by runValidate when the version string does
@@ -90,6 +91,7 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "gitsemver",
 		Short:         "Print or validate semVer-compatible version strings for git refs.",
+		Version:       fmt.Sprintf("%s (git: %s, built: %s)", project.Version(), project.GitSHA(), project.BuildTimestamp()),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
