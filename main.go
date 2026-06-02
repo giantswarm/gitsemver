@@ -46,8 +46,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/giantswarm/gitsemver/pkg/gitsemver"
-	"github.com/giantswarm/gitsemver/pkg/project"
+	"github.com/giantswarm/gitsemver/v2/pkg/gitsemver"
+	"github.com/giantswarm/gitsemver/v2/pkg/project"
 )
 
 // errInvalidVersion is returned by runValidate when the version string does
