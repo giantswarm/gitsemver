@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	billy "github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/osfs"
@@ -38,9 +37,6 @@ var branchEnvVarName = "GS_BRANCH_NAME"
 // branchSanitizeRegex replaces one or more consecutive invalid semVer
 // pre-release characters with a single hyphen.
 var branchSanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9-]+`)
-
-// nowFunc is the clock used for dev build timestamps; overridable in tests.
-var nowFunc = time.Now
 
 const unknownBranch = "unknown"
 
@@ -324,9 +320,11 @@ func buildVersionMaps(tagsByHash map[string][]string, tagPrefix string) (version
 //   - Untagged commit → returns a semVer dev build:
 //     "X.Y.(Z+1)-dev.<branch>.<YYYY-MM-DD>.<HH-MM-SS>"
 //     where X.Y.Z is the most recent stable (non-pre-release) ancestor tag reachable
-//     from the reference, or "0.0.0" when no stable ancestor exists. The branch name
-//     is resolved from GS_BRANCH_NAME env var, then the HEAD branch of the CWD git
-//     repo, then "unknown". Non-reachable tags are never used as the base.
+//     from the reference, or "0.0.0" when no stable ancestor exists. The timestamp is
+//     the committer date (in UTC) of the resolved commit, so the version is stable for
+//     a given commit. The branch name is resolved from GS_BRANCH_NAME env var, then the
+//     HEAD branch of the CWD git repo, then "unknown". Non-reachable tags are never used
+//     as the base.
 //
 // If GS_GIT_TAG_PREFIX is set, only tags prefixed with "<value>/" are considered,
 // e.g. "module-a/v1.2.3". The prefix, separator, and "v" are stripped from the result.
@@ -427,7 +425,7 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 		}
 	}
 	branch := sanitizeBranchName(currentBranch())
-	t := nowFunc().UTC()
+	t := commit.Committer.When.UTC()
 	pseudoVersion := fmt.Sprintf("%s-dev.%s.%s.%s",
 		base,
 		branch,

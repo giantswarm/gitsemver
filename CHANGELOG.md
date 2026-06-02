@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Dev build versions now derive their timestamp from the committer date of the resolved commit (in UTC)
+  instead of the current wall-clock time. This makes the version deterministic: resolving the same commit
+  always yields the same `X.Y.Z-dev.<branch>.<date>.<time>` string.
+
 ## [1.1.2] - 2026-05-28
 
 ### Fixed
