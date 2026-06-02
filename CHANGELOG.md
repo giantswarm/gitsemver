@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 
+- Renamed the `version` subcommand to `get` to avoid confusion with the `--version` flag. Use `gitsemver get`
+  to resolve and print the version for a git ref.
 - Dev build versions now derive their timestamp from the committer date of the resolved commit (in UTC)
   instead of the current wall-clock time. This makes the version deterministic: resolving the same commit
   always yields the same `X.Y.Z-dev.<branch>.<date>.<time>` string.

@@ -2,11 +2,11 @@
 //
 // Usage:
 //
-//	gitsemver version [--dir <path>] [--ref <ref>]
+//	gitsemver get [--dir <path>] [--ref <ref>]
 //	gitsemver next <bump-type> [--last-tag <tag>]
 //	gitsemver validate [--type dev|rc|stable|any] <version>
 //
-// The "version" subcommand resolves and prints the version for a git ref:
+// The "get" subcommand resolves and prints the version for a git ref:
 //
 //	For a ref that carries a stable tag (vX.Y.Z) it prints X.Y.Z.
 //	For a pre-release tag (vX.Y.Z-rc.N) it prints X.Y.Z-rc.N.
@@ -101,18 +101,18 @@ func newRootCmd() *cobra.Command {
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return &usageError{err}
 	})
-	root.AddCommand(newVersionCmd(), newNextCmd(), newValidateCmd())
+	root.AddCommand(newGetCmd(), newNextCmd(), newValidateCmd())
 	return root
 }
 
-func newVersionCmd() *cobra.Command {
+func newGetCmd() *cobra.Command {
 	var dir, ref string
 	cmd := &cobra.Command{
-		Use:   "version",
+		Use:   "get",
 		Short: "Resolve and print the semver version for a git ref.",
 		Args:  usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runVersion(dir, ref)
+			return runGet(dir, ref)
 		},
 	}
 	cmd.Flags().StringVar(&dir, "dir", ".", "path inside the git repository (resolved to the repo root)")
@@ -152,7 +152,7 @@ func newValidateCmd() *cobra.Command {
 	return cmd
 }
 
-func runVersion(dir, ref string) error {
+func runGet(dir, ref string) error {
 	ctx := context.Background()
 
 	topLevel, err := gitsemver.TopLevel(dir)
