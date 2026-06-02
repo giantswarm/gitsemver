@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Renamed the `version` subcommand to `get` to avoid confusion with the `--version` flag. Use `gitsemver get`
+  to resolve and print the version for a git ref.
+
 ## [1.1.2] - 2026-05-28
 
 ### Fixed

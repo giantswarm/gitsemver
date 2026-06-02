@@ -31,13 +31,13 @@ go install github.com/giantswarm/gitsemver@latest
 
 ```
 Usage:
-  gitsemver version [--dir <path>] [--ref <ref>]
+  gitsemver get [--dir <path>] [--ref <ref>]
   gitsemver next <patch|minor|major|patch-rc|minor-rc|major-rc|rc|rc-release> [--last-tag <tag>]
   gitsemver validate [--type dev|rc|stable|any] <version>
   gitsemver completion <bash|zsh|fish|powershell>
 ```
 
-### version
+### get
 
 Print the version for a git ref:
 
@@ -47,10 +47,10 @@ Print the version for a git ref:
 ```
 
 ```sh
-$ GS_BRANCH_NAME=my-feature gitsemver version
+$ GS_BRANCH_NAME=my-feature gitsemver get
 1.2.4-dev.my-feature.2026-01-27.09-49-59
 
-$ gitsemver version --ref v1.2.3
+$ gitsemver get --ref v1.2.3
 1.2.3
 ```
 
