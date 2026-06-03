@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- When a single commit reachable from HEAD carries multiple version tags, `get` and `next` no longer fail.
+  The highest tag in semver terms is chosen and a warning listing all discovered tags and the chosen one is
+  printed to stderr.
+
 ## [2.0.0] - 2026-06-02
 
 ### Changed
