@@ -17,6 +17,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   distinctive tail (e.g. `renovate-up--s-to-latest`). The base, timestamp and commit hash are always kept
   intact, so per-branch chronological sort order is unaffected.
 
+### Fixed
+
+- When a single commit reachable from HEAD carries multiple version tags, `get` and `next` no longer fail.
+  The highest tag in semver terms is chosen and a warning listing all discovered tags and the chosen one is
+  printed to stderr.
+
 ### Changed
 
 - Branch names embedded in dev versions are now lowercased and reduced to the DNS-safe set `[a-z0-9-]`

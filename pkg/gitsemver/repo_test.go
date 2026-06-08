@@ -951,27 +951,92 @@ func Test_Repo_ResolveVersion_nonReachableTagIgnored(t *testing.T) {
 	}
 }
 
-// A commit carrying two version tags must produce an error from ResolveVersion,
-// not silently return a randomly chosen version (symmetric with the NextVersion test).
-func Test_Repo_ResolveVersion_multipleTagsOnSameCommit_errors(t *testing.T) {
+// A commit carrying multiple version tags must not error: ResolveVersion picks
+// the highest-semver tag and emits a warning listing every discovered tag and
+// the one chosen.
+func Test_Repo_ResolveVersion_multipleTagsOnSameCommit_picksHighest(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	repo, gitRepo := newTestRepo(t)
+	var warn bytes.Buffer
+	repo.warn = &warn
 
 	h := testCreateCommit(t, gitRepo, "a.txt", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
-	if _, err := gitRepo.CreateTag("v1.0.0", h, nil); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := gitRepo.CreateTag("v1.0.1", h, nil); err != nil {
-		t.Fatal(err)
+	// Created lowest-last to prove selection is by semver, not creation order.
+	for _, tag := range []string{"v1.0.1", "v1.2.0", "v1.0.0"} {
+		if _, err := gitRepo.CreateTag(tag, h, nil); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	_, err := repo.ResolveVersion(ctx, h.String())
-	var execErr *ExecutionFailedError
-	if !errors.As(err, &execErr) {
-		t.Fatalf("err = %T (%v), want *ExecutionFailedError", err, err)
+	version, err := repo.ResolveVersion(ctx, h.String())
+	if err != nil {
+		t.Fatalf("ResolveVersion: unexpected error %v", err)
 	}
-	if !strings.Contains(execErr.Error(), "multiple version tags") {
-		t.Errorf("unexpected error message: %v", execErr)
+	if version != "1.2.0" {
+		t.Errorf("ResolveVersion = %q, want %q (highest semver among the tags)", version, "1.2.0")
+	}
+
+	out := warn.String()
+	for _, want := range []string{"v1.0.0", "v1.0.1", "v1.2.0"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("warning %q does not list discovered tag %q", out, want)
+		}
+	}
+}
+
+// When an untagged commit's nearest ancestor carries multiple stable tags, the
+// dev-build base is derived from the highest of them.
+func Test_Repo_ResolveVersion_devBuild_multipleAncestorTags_picksHighest(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv(branchEnvVarName, "test-branch")
+
+	repo, gitRepo := newTestRepo(t)
+	var warn bytes.Buffer
+	repo.warn = &warn
+
+	base := testCreateCommit(t, gitRepo, "a.txt", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+	for _, tag := range []string{"v1.0.0", "v1.0.1"} {
+		if _, err := gitRepo.CreateTag(tag, base, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	head := testCreateCommit(t, gitRepo, "b.txt", time.Date(2020, 1, 1, 1, 0, 0, 0, time.UTC))
+
+	version, err := repo.ResolveVersion(ctx, head.String())
+	if err != nil {
+		t.Fatalf("ResolveVersion: unexpected error %v", err)
+	}
+	want := "1.0.2-dev.test-branch.2020-01-01.01-00-00.h" + head.String()[:7]
+	if version != want {
+		t.Errorf("ResolveVersion = %q, want %q (dev base from highest ancestor tag 1.0.1)", version, want)
+	}
+}
+
+// When a commit carries both a stable tag and a higher-patched RC tag, the RC
+// wins for versionsByHash (semver §11: 1.0.1-rc.1 > 1.0.0) while the stable
+// tag is still tracked in stableVersionsByHash.
+func Test_Repo_ResolveVersion_mixedStableRC_picksHighestSemver(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	repo, gitRepo := newTestRepo(t)
+	var warn bytes.Buffer
+	repo.warn = &warn
+
+	h := testCreateCommit(t, gitRepo, "a.txt", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+	// RC created first to prove selection is by semver, not insertion order.
+	for _, tag := range []string{"v1.0.1-rc.1", "v1.0.0"} {
+		if _, err := gitRepo.CreateTag(tag, h, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	version, err := repo.ResolveVersion(ctx, h.String())
+	if err != nil {
+		t.Fatalf("ResolveVersion: unexpected error %v", err)
+	}
+	// compareSemver §11: v1.0.1-rc.1 > v1.0.0 (patch 1 > 0), so the RC is chosen.
+	if version != "1.0.1-rc.1" {
+		t.Errorf("ResolveVersion = %q, want %q", version, "1.0.1-rc.1")
 	}
 }

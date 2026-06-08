@@ -205,6 +205,9 @@ type Config struct {
 	// MaxVersionLength bounds the length of generated dev versions. When <= 0
 	// the GS_MAX_VERSION_LENGTH env var or the default of 63 is used.
 	MaxVersionLength int
+	// WarnWriter is where non-fatal warnings are written. If nil, os.Stderr is
+	// used. Set this to redirect or suppress warnings in library use.
+	WarnWriter io.Writer
 }
 
 type Repo struct {
@@ -215,6 +218,11 @@ type Repo struct {
 	worktree billy.Filesystem
 
 	maxVersionLength int
+
+	// warn is where non-fatal warnings (e.g. a commit carrying multiple
+	// version tags) are written. It defaults to os.Stderr so warnings never
+	// pollute the version printed to stdout; tests override it to capture output.
+	warn io.Writer
 }
 
 func New(config Config) (*Repo, error) {
@@ -259,14 +267,18 @@ func New(config Config) (*Repo, error) {
 		config.URL = remote.Config().URLs[0]
 	}
 
+	warnW := io.Writer(os.Stderr)
+	if config.WarnWriter != nil {
+		warnW = config.WarnWriter
+	}
 	r := &Repo{
 		url: config.URL,
 
-		auth:     auth,
-		storage:  storage,
-		worktree: worktree,
-
+		auth:             auth,
+		storage:          storage,
+		worktree:         worktree,
 		maxVersionLength: config.MaxVersionLength,
+		warn:             warnW,
 	}
 
 	return r, nil
@@ -409,39 +421,85 @@ func (r *Repo) HeadTag(ctx context.Context) (string, error) {
 // buildVersionMaps filters tagsByHash by tagPrefix and returns two maps keyed
 // by commit SHA: versionsByHash (all semver tags) and stableVersionsByHash
 // (stable-only tags). Version strings in both maps have no leading "v".
-// It returns an error if a single commit carries more than one version tag.
-func buildVersionMaps(tagsByHash map[string][]string, tagPrefix string) (versionsByHash, stableVersionsByHash map[string]string, err error) {
+//
+// When a single commit carries more than one version tag — which happens, for
+// example, when several tags point at the same commit — the highest tag in
+// semver terms is chosen and a warning listing every discovered tag and the
+// chosen one is written to warn.
+func buildVersionMaps(warn io.Writer, tagsByHash map[string][]string, tagPrefix string) (versionsByHash, stableVersionsByHash map[string]string, err error) {
 	versionsByHash = map[string]string{}
 	stableVersionsByHash = map[string]string{}
+
+	// versionOf strips the prefix and leading "v" so the remainder can be
+	// parsed and compared by compareSemver.
+	versionOf := func(t string) string { return strings.TrimPrefix(t, "v") }
+	if tagPrefix != "" {
+		versionOf = func(t string) string {
+			return strings.TrimPrefix(strings.TrimPrefix(t, tagPrefix+"/"), "v")
+		}
+	}
+
 	for hash, tags := range tagsByHash {
-		var versionTags []string
+		var versionTags, stableTags []string
 		for _, t := range tags {
 			if tagPrefix != "" {
 				if prefixedTagRegex.MatchString(t) && strings.HasPrefix(t, tagPrefix+"/") {
 					versionTags = append(versionTags, t)
-					version := strings.TrimPrefix(strings.TrimPrefix(t, tagPrefix+"/"), "v")
-					versionsByHash[hash] = version
-					tagWithoutPrefix := strings.TrimPrefix(t, tagPrefix+"/")
-					if stableTagRegex.MatchString(tagWithoutPrefix) {
-						stableVersionsByHash[hash] = version
+					if stableTagRegex.MatchString(strings.TrimPrefix(t, tagPrefix+"/")) {
+						stableTags = append(stableTags, t)
 					}
 				}
 			} else {
 				if tagRegex.MatchString(t) {
 					versionTags = append(versionTags, t)
-					version := strings.TrimPrefix(t, "v")
-					versionsByHash[hash] = version
 					if stableTagRegex.MatchString(t) {
-						stableVersionsByHash[hash] = version
+						stableTags = append(stableTags, t)
 					}
 				}
 			}
 		}
-		if len(versionTags) > 1 {
-			return nil, nil, &ExecutionFailedError{message: fmt.Sprintf("multiple version tags %#v found for hash %#q", versionTags, hash)}
+
+		if len(versionTags) > 0 {
+			chosen, err := highestVersionTag(versionTags, versionOf)
+			if err != nil {
+				return nil, nil, err
+			}
+			if len(versionTags) > 1 {
+				_, _ = fmt.Fprintf(warn, "warning: commit %s carries multiple version tags %s; using the highest, %q\n", hash, strings.Join(versionTags, ", "), chosen)
+			}
+			versionsByHash[hash] = versionOf(chosen)
+		}
+		if len(stableTags) > 0 {
+			chosen, err := highestVersionTag(stableTags, versionOf)
+			if err != nil {
+				return nil, nil, err
+			}
+			stableVersionsByHash[hash] = versionOf(chosen)
 		}
 	}
 	return versionsByHash, stableVersionsByHash, nil
+}
+
+// highestVersionTag returns the tag with the highest semver precedence among
+// tags, all of which are assumed to belong to the same commit. versionOf maps a
+// tag name to the bare version string that compareSemver understands (prefix
+// and leading "v" stripped). tags must be non-empty.
+func highestVersionTag(tags []string, versionOf func(string) string) (string, error) {
+	best := tags[0]
+	bestParsed, err := parseVersionString(versionOf(best))
+	if err != nil {
+		return "", err
+	}
+	for _, t := range tags[1:] {
+		parsed, err := parseVersionString(versionOf(t))
+		if err != nil {
+			return "", err
+		}
+		if compareSemver(parsed, bestParsed) > 0 {
+			best, bestParsed = t, parsed
+		}
+	}
+	return best, nil
 }
 
 // ResolveVersion resolves the version for a git reference:
@@ -480,7 +538,7 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	versionsByHash, stableVersionsByHash, err := buildVersionMaps(tagsByHash, tagPrefix)
+	versionsByHash, stableVersionsByHash, err := buildVersionMaps(r.warn, tagsByHash, tagPrefix)
 	if err != nil {
 		return "", err
 	}
@@ -595,7 +653,7 @@ func (r *Repo) NextVersion(ctx context.Context, bumpType string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	versionsByHash, _, err := buildVersionMaps(tagsByHash, tagPrefix)
+	versionsByHash, _, err := buildVersionMaps(r.warn, tagsByHash, tagPrefix)
 	if err != nil {
 		return "", err
 	}

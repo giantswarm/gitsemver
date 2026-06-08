@@ -1,6 +1,7 @@
 package gitsemver
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -337,29 +338,37 @@ func Test_Repo_NextVersion_monorepoPrefixFiltering(t *testing.T) {
 	}
 }
 
-// A commit carrying two version tags must produce an error, not silently
-// return a randomly chosen version (regression test for the dead versionTags
-// guard that was scoped inside the inner per-tag loop).
-func Test_Repo_NextVersion_multipleTagsOnSameCommit_errors(t *testing.T) {
+// A commit carrying multiple version tags must not error: NextVersion computes
+// the bump from the highest-semver tag and emits a warning listing every
+// discovered tag.
+func Test_Repo_NextVersion_multipleTagsOnSameCommit_picksHighest(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	repo, gitRepo := newTestRepo(t)
+	var warn bytes.Buffer
+	repo.warn = &warn
 
 	h := testCreateCommit(t, gitRepo, "a.txt", nextTestBaseTime)
-	if _, err := gitRepo.CreateTag("v1.0.0", h, nil); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := gitRepo.CreateTag("v1.0.1", h, nil); err != nil {
-		t.Fatal(err)
+	// Created lowest-last to prove selection is by semver, not creation order.
+	for _, tag := range []string{"v1.0.1", "v1.0.0"} {
+		if _, err := gitRepo.CreateTag(tag, h, nil); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	_, err := repo.NextVersion(ctx, "patch")
-	var execErr *ExecutionFailedError
-	if !errors.As(err, &execErr) {
-		t.Fatalf("err = %T (%v), want *ExecutionFailedError", err, err)
+	got, err := repo.NextVersion(ctx, "patch")
+	if err != nil {
+		t.Fatalf("NextVersion: unexpected error %v", err)
 	}
-	if !strings.Contains(execErr.Error(), "multiple version tags") {
-		t.Errorf("unexpected error message: %v", execErr)
+	if got != "1.0.2" {
+		t.Errorf("NextVersion = %q, want %q (patch bump from highest tag 1.0.1)", got, "1.0.2")
+	}
+
+	out := warn.String()
+	for _, want := range []string{"v1.0.0", "v1.0.1"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("warning %q does not list discovered tag %q", out, want)
+		}
 	}
 }
 
