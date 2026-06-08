@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - When a single commit reachable from HEAD carries multiple version tags, `get` and `next` no longer fail.
   The highest tag in semver terms is chosen and a warning listing all discovered tags and the chosen one is
   printed to stderr.
-  
+
 ### Changed
 
 - Release binaries now include darwin/amd64, darwin/arm64, windows/amd64, and windows/arm64 alongside the existing linux targets. Windows binaries are named `gitsemver-windows-<arch>.exe`.
