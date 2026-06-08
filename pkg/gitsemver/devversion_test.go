@@ -83,6 +83,24 @@ func Test_buildDevVersion(t *testing.T) {
 		}
 	})
 
+	t.Run("multi-digit version base shrinks the branch budget", func(t *testing.T) {
+		branch := "renovate-update-all-dependencies-to-latest"
+		// The overhead is derived from len(base), so a wider base leaves less
+		// room for the branch. Every result must still be valid and within 63.
+		for _, base := range []string{"1.2.4", "10.12.346", "100.200.3456"} {
+			got, err := buildDevVersion(base, branch, sha, ts, 63)
+			if err != nil {
+				t.Fatalf("base %s: unexpected error: %v", base, err)
+			}
+			if len(got) > 63 {
+				t.Errorf("base %s: %q (len %d) exceeds the 63 char budget", base, got, len(got))
+			}
+			if !IsValidDev(got) {
+				t.Errorf("base %s: %q is not a valid dev version", base, got)
+			}
+		}
+	})
+
 	t.Run("commit hash uses the 7-char short form", func(t *testing.T) {
 		got, err := buildDevVersion("0.0.0", "main", sha, ts, 63)
 		if err != nil {
