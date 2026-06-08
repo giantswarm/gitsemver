@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-06-08
+
 ### Added
 
 - Dev build versions now carry a trailing `.h<commit-sha>` segment (7-char git short hash of the resolved
@@ -191,7 +193,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - Functions signature for `EnsureUpToDate` and `ResolveVersion`.
 
-[Unreleased]: https://github.com/giantswarm/gitsemver/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/giantswarm/gitsemver/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/giantswarm/gitsemver/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/giantswarm/gitsemver/compare/v1.1.2...v2.0.0
 [1.1.2]: https://github.com/giantswarm/gitsemver/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/giantswarm/gitsemver/compare/v1.1.0...v1.1.1
