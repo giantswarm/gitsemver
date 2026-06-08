@@ -98,6 +98,13 @@ func Test_IsValidDev(t *testing.T) {
 		"1.0.1-dev.feature-my-thing.2026-05-21.14-30-00",
 		// single-char branch
 		"1.0.0-dev.x.2026-05-21.00-00-00",
+		// with the optional commit-hash segment
+		"1.2.4-dev.my-feature.2026-01-27.09-49-59.h1a2b3c4",
+		"v1.2.3-dev.main.2026-01-27.09-49-59.habc1234",
+		// all-digit hash (legal because the "h" prefix keeps it alphanumeric)
+		"1.2.4-dev.main.2026-01-27.09-49-59.h0012345",
+		// middle-truncated branch with the "--" marker
+		"1.2.4-dev.renovate-up--s-to-latest.2026-01-27.09-49-59.h1a2b3c4",
 	}
 	invalid := []string{
 		"",
@@ -105,6 +112,14 @@ func Test_IsValidDev(t *testing.T) {
 		"1.2.3-rc.1",
 		// missing time segment
 		"1.2.3-dev.main.2026-01-27",
+		// commit-hash segment missing the "h" prefix
+		"1.2.3-dev.main.2026-01-27.09-49-59.1a2b3c4",
+		// commit-hash too short / too long
+		"1.2.3-dev.main.2026-01-27.09-49-59.h1a2b3c",
+		"1.2.3-dev.main.2026-01-27.09-49-59.h1a2b3c45",
+		// commit-hash not lowercase hex
+		"1.2.3-dev.main.2026-01-27.09-49-59.hABC1234",
+		"1.2.3-dev.main.2026-01-27.09-49-59.hxyz1234",
 		// wrong date separator (slashes)
 		"1.2.3-dev.main.2026/01/27.09-49-59",
 		// wrong time separator (colons)

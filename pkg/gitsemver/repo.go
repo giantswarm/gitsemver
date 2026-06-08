@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	billy "github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/osfs"
@@ -34,11 +35,32 @@ var prefixedTagRegex = regexp.MustCompile(`^[a-zA-Z0-9-_]+/v[0-9]+\.[0-9]+\.[0-9
 
 var branchEnvVarName = "GS_BRANCH_NAME"
 
-// branchSanitizeRegex replaces one or more consecutive invalid semVer
-// pre-release characters with a single hyphen.
-var branchSanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9-]+`)
+// branchSanitizeRegex matches one or more consecutive characters that are not
+// valid in a DNS label / semVer pre-release identifier (anything outside
+// [a-z0-9]). A run is replaced with a single hyphen, which also collapses
+// existing hyphen runs so that "--" is reserved as the truncation marker.
+var branchSanitizeRegex = regexp.MustCompile(`[^a-z0-9]+`)
 
 const unknownBranch = "unknown"
+
+const (
+	// defaultMaxVersionLength is the DNS-1123 label / Kubernetes label-value
+	// length limit. Generated dev versions are bounded to it by default so they
+	// stay usable as Kubernetes attributes.
+	defaultMaxVersionLength = 63
+	// maxVersionLengthEnvVarName overrides the maximum generated version length.
+	maxVersionLengthEnvVarName = "GS_MAX_VERSION_LENGTH"
+	// devShortSHALen is the number of hex characters of the commit hash kept in
+	// a dev version, matching the conventional git short-hash length.
+	devShortSHALen = 7
+	// devTruncationMarker is inserted in place of the dropped middle of an
+	// over-long branch name.
+	devTruncationMarker = "--"
+	// devHashPrefix prefixes the commit hash so the segment is always
+	// alphanumeric, hence compared lexically by semVer and never an illegal
+	// all-digit identifier with a leading zero.
+	devHashPrefix = "h"
+)
 
 // currentBranch returns the name of the branch to embed in dev build versions.
 // Priority: GS_BRANCH_NAME env var > HEAD branch of CWD git repo > unknownBranch.
@@ -57,8 +79,110 @@ func currentBranch() string {
 	return head.Name().Short()
 }
 
+// sanitizeBranchName reduces a branch name to the DNS-label / semVer-safe
+// character set [a-z0-9-]: it lowercases, replaces every run of other
+// characters (and hyphen runs) with a single hyphen and trims leading/trailing
+// hyphens. An empty result falls back to unknownBranch.
+//
+// A purely-numeric result is a semVer numeric identifier, which forbids leading
+// zeros (spec §9), so leading zeros are stripped to keep the dev version a valid
+// semVer string (e.g. branch "0042" -> "42"). A name containing any non-digit is
+// an alphanumeric identifier where leading zeros are allowed and kept.
 func sanitizeBranchName(branch string) string {
-	return branchSanitizeRegex.ReplaceAllString(branch, "-")
+	b := strings.Trim(branchSanitizeRegex.ReplaceAllString(strings.ToLower(branch), "-"), "-")
+	if b == "" {
+		return unknownBranch
+	}
+	if isAllDigits(b) {
+		if b = strings.TrimLeft(b, "0"); b == "" {
+			b = "0"
+		}
+	}
+	return b
+}
+
+// isAllDigits reports whether s is non-empty and consists solely of ASCII digits.
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// resolveMaxVersionLength determines the maximum allowed length of a generated
+// version string. An explicit positive configured value wins; otherwise the
+// GS_MAX_VERSION_LENGTH env var (when a positive integer) is used; otherwise
+// defaultMaxVersionLength.
+func resolveMaxVersionLength(configured int) int {
+	if configured > 0 {
+		return configured
+	}
+	if v := strings.TrimSpace(os.Getenv(maxVersionLengthEnvVarName)); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return defaultMaxVersionLength
+}
+
+// truncateBranch shortens branch to at most budget characters. A branch that
+// already fits is returned unchanged. Otherwise its middle is dropped and
+// replaced with the "--" marker, keeping the head and the (more distinctive)
+// tail, e.g. "renovate-update-all-deps" -> "renovate-up--all-deps". When the
+// budget is too small to keep both ends the branch is cut to its head. The
+// result never starts or ends with a hyphen.
+func truncateBranch(branch string, budget int) string {
+	if budget < 1 {
+		budget = 1
+	}
+	if len(branch) <= budget {
+		return branch
+	}
+	// Not enough room for head + marker + at least one tail char: plain cut.
+	if budget < len(devTruncationMarker)+2 {
+		return strings.TrimRight(branch[:budget], "-")
+	}
+	keep := budget - len(devTruncationMarker)
+	headLen := keep / 2
+	tailLen := keep - headLen
+	head := strings.TrimRight(branch[:headLen], "-")
+	tail := strings.TrimLeft(branch[len(branch)-tailLen:], "-")
+	return head + devTruncationMarker + tail
+}
+
+// buildDevVersion assembles a dev build version of the form
+// "X.Y.Z-dev.<branch>.<YYYY-MM-DD>.<HH-MM-SS>.h<sha>" bounded to maxLen
+// characters. Only the branch is shortened to fit (see truncateBranch); the
+// version base, timestamp and commit hash are always preserved, so the
+// per-branch chronological sort order is never affected. commitSHA is the full
+// commit hash; its first devShortSHALen hex characters are embedded. It returns
+// an error when even the fixed parts do not fit maxLen.
+func buildDevVersion(base, branch, commitSHA string, t time.Time, maxLen int) (string, error) {
+	date := t.Format("2006-01-02")
+	clock := t.Format("15-04-05")
+	short := commitSHA
+	if len(short) > devShortSHALen {
+		short = short[:devShortSHALen]
+	}
+	hash := devHashPrefix + short
+
+	// Characters consumed by everything except the branch:
+	//   base + "-dev." + branch + "." + date + "." + clock + "." + hash
+	overhead := len(base) + len("-dev.") + 1 + len(date) + 1 + len(clock) + 1 + len(hash)
+	branchBudget := maxLen - overhead
+	if branchBudget < 1 {
+		return "", &ExecutionFailedError{message: fmt.Sprintf(
+			"cannot fit a dev version for base %q within %d characters (fixed parts need %d)",
+			base, maxLen, overhead+1)}
+	}
+
+	branch = truncateBranch(branch, branchBudget)
+	return fmt.Sprintf("%s-dev.%s.%s.%s.%s", base, branch, date, clock, hash), nil
 }
 
 func incrementPatch(version string) (string, error) {
@@ -78,6 +202,9 @@ type Config struct {
 	AuthBasicToken string
 	Dir            string
 	URL            string
+	// MaxVersionLength bounds the length of generated dev versions. When <= 0
+	// the GS_MAX_VERSION_LENGTH env var or the default of 63 is used.
+	MaxVersionLength int
 }
 
 type Repo struct {
@@ -86,6 +213,8 @@ type Repo struct {
 	auth     transport.AuthMethod
 	storage  *filesystem.Storage
 	worktree billy.Filesystem
+
+	maxVersionLength int
 }
 
 func New(config Config) (*Repo, error) {
@@ -136,6 +265,8 @@ func New(config Config) (*Repo, error) {
 		auth:     auth,
 		storage:  storage,
 		worktree: worktree,
+
+		maxVersionLength: config.MaxVersionLength,
 	}
 
 	return r, nil
@@ -318,13 +449,19 @@ func buildVersionMaps(tagsByHash map[string][]string, tagPrefix string) (version
 //   - Stable tag vX.Y.Z on the commit → returns "X.Y.Z"
 //   - Pre-release tag vX.Y.Z-<pre> on the commit → returns "X.Y.Z-<pre>" (e.g. "1.2.3-rc.1")
 //   - Untagged commit → returns a semVer dev build:
-//     "X.Y.(Z+1)-dev.<branch>.<YYYY-MM-DD>.<HH-MM-SS>"
+//     "X.Y.(Z+1)-dev.<branch>.<YYYY-MM-DD>.<HH-MM-SS>.h<commit-sha>"
 //     where X.Y.Z is the most recent stable (non-pre-release) ancestor tag reachable
 //     from the reference, or "0.0.0" when no stable ancestor exists. The timestamp is
 //     the committer date (in UTC) of the resolved commit, so the version is stable for
-//     a given commit. The branch name is resolved from GS_BRANCH_NAME env var, then the
-//     HEAD branch of the CWD git repo, then "unknown". Non-reachable tags are never used
-//     as the base.
+//     a given commit. The trailing ".h<commit-sha>" is the 7-char git short hash of the
+//     resolved commit, for tag-to-commit traceability. The branch name is resolved from
+//     GS_BRANCH_NAME env var, then the HEAD branch of the CWD git repo, then "unknown".
+//     Non-reachable tags are never used as the base.
+//
+// The whole version is bounded to MaxVersionLength characters (GS_MAX_VERSION_LENGTH
+// env var, default 63) so it stays usable as a Kubernetes attribute. Only the branch
+// part is shortened to fit (its middle is replaced with a "--" marker); the base,
+// timestamp and commit hash are always kept intact.
 //
 // If GS_GIT_TAG_PREFIX is set, only tags prefixed with "<value>/" are considered,
 // e.g. "module-a/v1.2.3". The prefix, separator, and "v" are stripped from the result.
@@ -426,12 +563,10 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 	}
 	branch := sanitizeBranchName(currentBranch())
 	t := commit.Committer.When.UTC()
-	pseudoVersion := fmt.Sprintf("%s-dev.%s.%s.%s",
-		base,
-		branch,
-		t.Format("2006-01-02"),
-		t.Format("15-04-05"),
-	)
+	pseudoVersion, err := buildDevVersion(base, branch, commit.Hash.String(), t, resolveMaxVersionLength(r.maxVersionLength))
+	if err != nil {
+		return "", err
+	}
 
 	return pseudoVersion, nil
 }

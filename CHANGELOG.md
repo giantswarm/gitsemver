@@ -7,8 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Dev build versions now carry a trailing `.h<commit-sha>` segment (7-char git short hash of the resolved
+  commit) for tag-to-commit traceability, e.g. `1.2.4-dev.my-feature.2026-01-27.09-49-59.h1a2b3c4`.
+- Generated dev versions are bounded to a maximum length (default 63, configurable via `GS_MAX_VERSION_LENGTH`
+  or `Config.MaxVersionLength`) so they stay usable as Kubernetes/DNS attributes. Only the branch part is
+  shortened to fit: its middle is dropped and replaced with a `--` marker, keeping the head and the more
+  distinctive tail (e.g. `renovate-up--s-to-latest`). The base, timestamp and commit hash are always kept
+  intact, so per-branch chronological sort order is unaffected.
+
 ### Changed
 
+- Branch names embedded in dev versions are now lowercased and reduced to the DNS-safe set `[a-z0-9-]`
+  (hyphen runs collapsed, ends trimmed). Purely-numeric branch names have leading zeros stripped so the
+  segment is a valid semVer numeric identifier (e.g. `0042` -> `42`).
 - Release binaries now include darwin/amd64, darwin/arm64, windows/amd64, and windows/arm64 alongside the existing linux targets. Windows binaries are named `gitsemver-windows-<arch>.exe`.
 
 ## [2.0.0] - 2026-06-02
