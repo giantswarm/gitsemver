@@ -984,3 +984,31 @@ func Test_Repo_ResolveVersion_devBuild_multipleAncestorTags_picksHighest(t *test
 		t.Errorf("ResolveVersion = %q, want %q (dev base from highest ancestor tag 1.0.1)", version, want)
 	}
 }
+
+// When a commit carries both a stable tag and a higher-patched RC tag, the RC
+// wins for versionsByHash (semver §11: 1.0.1-rc.1 > 1.0.0) while the stable
+// tag is still tracked in stableVersionsByHash.
+func Test_Repo_ResolveVersion_mixedStableRC_picksHighestSemver(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	repo, gitRepo := newTestRepo(t)
+	var warn bytes.Buffer
+	repo.warn = &warn
+
+	h := testCreateCommit(t, gitRepo, "a.txt", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+	// RC created first to prove selection is by semver, not insertion order.
+	for _, tag := range []string{"v1.0.1-rc.1", "v1.0.0"} {
+		if _, err := gitRepo.CreateTag(tag, h, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	version, err := repo.ResolveVersion(ctx, h.String())
+	if err != nil {
+		t.Fatalf("ResolveVersion: unexpected error %v", err)
+	}
+	// compareSemver §11: v1.0.1-rc.1 > v1.0.0 (patch 1 > 0), so the RC is chosen.
+	if version != "1.0.1-rc.1" {
+		t.Errorf("ResolveVersion = %q, want %q", version, "1.0.1-rc.1")
+	}
+}

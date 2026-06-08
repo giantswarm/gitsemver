@@ -78,6 +78,9 @@ type Config struct {
 	AuthBasicToken string
 	Dir            string
 	URL            string
+	// WarnWriter is where non-fatal warnings are written. If nil, os.Stderr is
+	// used. Set this to redirect or suppress warnings in library use.
+	WarnWriter io.Writer
 }
 
 type Repo struct {
@@ -135,13 +138,17 @@ func New(config Config) (*Repo, error) {
 		config.URL = remote.Config().URLs[0]
 	}
 
+	warnW := io.Writer(os.Stderr)
+	if config.WarnWriter != nil {
+		warnW = config.WarnWriter
+	}
 	r := &Repo{
 		url: config.URL,
 
 		auth:     auth,
 		storage:  storage,
 		worktree: worktree,
-		warn:     os.Stderr,
+		warn:     warnW,
 	}
 
 	return r, nil
@@ -328,7 +335,7 @@ func buildVersionMaps(warn io.Writer, tagsByHash map[string][]string, tagPrefix 
 				return nil, nil, err
 			}
 			if len(versionTags) > 1 {
-				_, _ = fmt.Fprintf(warn, "warning: commit %s carries multiple version tags %v; using the highest, %q\n", hash, versionTags, chosen)
+				_, _ = fmt.Fprintf(warn, "warning: commit %s carries multiple version tags %s; using the highest, %q\n", hash, strings.Join(versionTags, ", "), chosen)
 			}
 			versionsByHash[hash] = versionOf(chosen)
 		}
