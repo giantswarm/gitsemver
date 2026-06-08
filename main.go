@@ -34,6 +34,10 @@
 //	                    "<value>/", e.g. "module-a/v1.2.3". The "next --last-tag"
 //	                    flag accepts both prefixed ("module-a/v1.2.3") and bare
 //	                    ("v1.2.3") forms; the prefix is stripped automatically.
+//	GS_MAX_VERSION_LENGTH
+//	                    Maximum length of a generated dev build version, so it
+//	                    stays usable as a Kubernetes attribute. Defaults to 63.
+//	                    Only the branch part is shortened to fit.
 package main
 
 import (

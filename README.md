@@ -11,10 +11,19 @@ Library and CLI tool for computing a semVer-compatible version from a git refere
 |---|---|
 | HEAD carries stable tag `vX.Y.Z` | `X.Y.Z` |
 | HEAD carries pre-release tag `vX.Y.Z-rc.N` | `X.Y.Z-rc.N` |
-| HEAD is untagged, stable ancestor `vX.Y.Z` reachable | `X.Y.(Z+1)-dev.<branch>.<YYYY-MM-DD>.<HH-MM-SS>` |
-| HEAD is untagged, no stable ancestor reachable | `0.0.0-dev.<branch>.<YYYY-MM-DD>.<HH-MM-SS>` |
+| HEAD is untagged, stable ancestor `vX.Y.Z` reachable | `X.Y.(Z+1)-dev.<branch>.<YYYY-MM-DD>.<HH-MM-SS>.h<commit-sha>` |
+| HEAD is untagged, no stable ancestor reachable | `0.0.0-dev.<branch>.<YYYY-MM-DD>.<HH-MM-SS>.h<commit-sha>` |
 
-For untagged commits the base is the most recent **stable** ancestor tag reachable from the ref (RC and other pre-release tags are skipped). When no stable ancestor exists the version prefix is `0.0.0` with no patch increment.
+For untagged commits the base is the most recent **stable** ancestor tag reachable from the ref (RC and other pre-release tags are skipped). When no stable ancestor exists the version prefix is `0.0.0` with no patch increment. The trailing `.h<commit-sha>` is the 7-char git short hash of the resolved commit, for tag-to-commit traceability.
+
+### Length limit
+
+Dev build versions are often used as Kubernetes attributes, so they are kept DNS/label-compatible (lowercased, `[a-z0-9-]` only) and bounded to a maximum length (default **63**, configurable via `GS_MAX_VERSION_LENGTH`). Only the branch part is ever shortened to fit: when it would overflow, its middle is dropped and replaced with a `--` marker, keeping the head and the more distinctive tail (e.g. `renovate-up--s-to-latest`). The version base, timestamp and commit hash are always kept intact, so the per-branch chronological sort order is never affected.
+
+```sh
+$ GS_BRANCH_NAME=renovate/update-all-dependencies-to-latest gitsemver get
+1.2.4-dev.renovate-up--s-to-latest.2026-01-27.09-49-59.h1a2b3c4
+```
 
 ## Environment variables
 
@@ -22,6 +31,7 @@ For untagged commits the base is the most recent **stable** ancestor tag reachab
 |---|---|
 | `GS_BRANCH_NAME` | Override the branch name embedded in dev build versions. Defaults to the HEAD branch of the repo, then `"unknown"`. |
 | `GS_GIT_TAG_PREFIX` | Monorepo support: only consider tags prefixed with `"<value>/"`, e.g. `module-a/v1.2.3`. |
+| `GS_MAX_VERSION_LENGTH` | Maximum length of a generated dev build version. Defaults to `63`. Only the branch part is shortened to fit. |
 
 ## CLI — `gitsemver`
 
@@ -48,7 +58,7 @@ Print the version for a git ref:
 
 ```sh
 $ GS_BRANCH_NAME=my-feature gitsemver get
-1.2.4-dev.my-feature.2026-01-27.09-49-59
+1.2.4-dev.my-feature.2026-01-27.09-49-59.h1a2b3c4
 
 $ gitsemver get --ref v1.2.3
 1.2.3
@@ -117,5 +127,5 @@ c := gitsemver.Config{
 }
 repo, err := gitsemver.New(c)
 version, err := repo.ResolveVersion(ctx, "HEAD")
-// e.g. "1.2.4-dev.my-feature.2026-01-27.09-49-59"
+// e.g. "1.2.4-dev.my-feature.2026-01-27.09-49-59.h1a2b3c4"
 ```

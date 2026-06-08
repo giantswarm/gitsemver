@@ -472,8 +472,24 @@ func Test_Repo_ResolveVersion(t *testing.T) {
 					t.Fatalf("error == %#v, want matching", err)
 				}
 
-				if version != tc.expectedVersion {
-					t.Errorf("got %q, expected %q\n", version, tc.expectedVersion)
+				// Dev versions carry a trailing ".h<7-hex>" short hash of the
+				// resolved commit. Derive it from the same ref so the table can
+				// keep the stable, hash-free prefix as the expectation.
+				expected := tc.expectedVersion
+				if strings.Contains(expected, "-dev.") {
+					gitRepo, err := git.Open(repo.storage, repo.worktree)
+					if err != nil {
+						t.Fatalf("opening repo to resolve commit hash: %v", err)
+					}
+					h, err := gitRepo.ResolveRevision(plumbing.Revision(tc.inputRef))
+					if err != nil {
+						t.Fatalf("resolving %q: %v", tc.inputRef, err)
+					}
+					expected += ".h" + h.String()[:devShortSHALen]
+				}
+
+				if version != expected {
+					t.Errorf("got %q, expected %q\n", version, expected)
 				}
 			}
 		})
@@ -715,7 +731,17 @@ func Test_sanitizeBranchName(t *testing.T) {
 		{"feat/sub/deep", "feat-sub-deep"},
 		{"already-clean-123", "already-clean-123"},
 		{"feat//double-slash", "feat-double-slash"}, // consecutive invalid chars → single hyphen
-		{"__leading", "-leading"},                   // leading invalid chars
+		{"__leading", "leading"},                    // leading invalid chars trimmed
+		{"trailing__", "trailing"},                  // trailing invalid chars trimmed
+		{"Feature/MyThing", "feature-mything"},      // lowercased
+		{"UPPER", "upper"},                          // lowercased
+		{"a--b", "a-b"},                             // hyphen runs collapsed ("--" reserved as marker)
+		{"///", "unknown"},                          // empty result falls back to unknownBranch
+		{"0042", "42"},                              // all-digit branch: leading zeros stripped (illegal semVer numeric id)
+		{"007", "7"},                                // all-digit branch: leading zeros stripped
+		{"000", "0"},                                // all zeros collapse to a single "0"
+		{"42", "42"},                                // numeric without leading zero is kept
+		{"0-1", "0-1"},                              // contains a hyphen → alphanumeric id, leading zero kept
 	}
 
 	for _, tc := range cases {
@@ -860,8 +886,9 @@ func Test_Repo_ResolveVersion_rcAncestor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Timestamp is the committer date of the HEAD commit (base + 2h).
-	const want = "1.0.1-dev.test-branch.2020-01-01.02-00-00"
+	// Timestamp is the committer date of the HEAD commit (base + 2h); the
+	// trailing segment is the short hash of the resolved HEAD commit.
+	want := "1.0.1-dev.test-branch.2020-01-01.02-00-00.h" + headHash.String()[:devShortSHALen]
 	if version != want {
 		t.Errorf("ResolveVersion = %q, want %q — RC ancestor must be skipped, base must come from v1.0.0", version, want)
 	}
@@ -916,8 +943,9 @@ func Test_Repo_ResolveVersion_nonReachableTagIgnored(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Timestamp is the committer date of the HEAD commit (base + 2h).
-	const want = "1.0.1-dev.test-branch.2020-01-01.02-00-00"
+	// Timestamp is the committer date of the HEAD commit (base + 2h); the
+	// trailing segment is the short hash of the resolved HEAD commit.
+	want := "1.0.1-dev.test-branch.2020-01-01.02-00-00.h" + headHash.String()[:devShortSHALen]
 	if version != want {
 		t.Errorf("ResolveVersion = %q, want %q — non-reachable v2.0.0 on side branch must be ignored", version, want)
 	}
@@ -979,7 +1007,7 @@ func Test_Repo_ResolveVersion_devBuild_multipleAncestorTags_picksHighest(t *test
 	if err != nil {
 		t.Fatalf("ResolveVersion: unexpected error %v", err)
 	}
-	const want = "1.0.2-dev.test-branch.2020-01-01.01-00-00"
+	want := "1.0.2-dev.test-branch.2020-01-01.01-00-00.h" + head.String()[:7]
 	if version != want {
 		t.Errorf("ResolveVersion = %q, want %q (dev base from highest ancestor tag 1.0.1)", version, want)
 	}
