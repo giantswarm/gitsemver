@@ -21,10 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   the `X.Y.Z` part can still do that
   ([giantswarm#37079](https://github.com/giantswarm/giantswarm/issues/37079)). The branch is identified by the
   CRC-32/ISO-HDLC checksum of its full, unsanitized name instead of the sanitized name itself, so no part of
-  the tag is truncated any more. The separators differ from the RFC, which spells them `b`, `t` and `c`:
-  `b` and `c` are hex digits and hide the field boundaries, so this tool uses `r` (ref), `t` (time) and
-  `h` (hash). The field order, the widths, the CRC variant and the 33-character total are unchanged.
-  [RFC PR #159](https://github.com/giantswarm/rfc/pull/159) amends the RFC to match.
+  the tag is truncated any more. The separators are `r` (ref), `t` (time) and `h` (hash): none of the three
+  is a hex digit, so a reader always sees where a field ends.
 - `validate --type dev` accepts both the new schema and the superseded
   `X.Y.Z-dev.<branch>.<YYYY-MM-DD>.<HH-MM-SS>[.h<commit-sha>]` one, because tags in the old format are already
   published. `get` only ever generates the new one.
@@ -32,7 +30,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   Note the sort order: a new tag sorts **above** an old one at the same `X.Y.Z`, because `r` > `d` in the
   first pre-release identifier, so a consumer moves to the new schema at once. Against an `-rc.N` tag at the
   same base the order depends on the first digit of the branch hash (`0` to `b` below the RC, `c` to `f`
-  above it), so select dev builds with `semverFilter: ".*-r<branch-hash>t.*"` rather than a bare range.
+  above it), so select dev builds with a width-pinned filter
+  (`semverFilter: "^.*-r<branch-hash>t[0-9]{14}h[0-9a-f]{7}$"`) rather than a bare range.
 
 ### Added
 

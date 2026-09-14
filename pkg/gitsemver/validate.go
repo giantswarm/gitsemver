@@ -37,7 +37,7 @@ func IsValidRC(version string) bool {
 
 // IsValidDev reports whether version is a valid dev-build version, with or
 // without a leading "v" and with no leading zeros in the X.Y.Z components. It
-// accepts both the current schema (X.Y.Z-b<8-hex>t<14-digits>h<7-hex>) and the
+// accepts both the current schema (X.Y.Z-r<8-hex>t<14-digits>h<7-hex>) and the
 // superseded one (X.Y.Z-dev.<branch>.<YYYY-MM-DD>.<HH-MM-SS>[.h<7-hex>]),
 // because tags in the old format are already published. This checks the shape
 // only, not whether the time stamp is a real date.

@@ -40,11 +40,10 @@ func Test_buildDevVersion(t *testing.T) {
 	ts := time.Date(2026, 1, 27, 9, 49, 59, 0, time.UTC)
 	sha := "1a2b3c4d5e6f7a8b9c0d"
 
-	t.Run("matches the RFC example, with the readable separators", func(t *testing.T) {
-		// The RFC spells the separators "b", "t" and "c". "b" and "c" are hex
-		// digits, so a reader cannot see where a field ends. "r", "t" and "h"
-		// carry the same meaning and none of them is a hex digit. Every other
-		// property of the RFC example is unchanged, the CRC value included.
+	t.Run("matches the RFC example", func(t *testing.T) {
+		// The RFC decision of 2026-09-10 spells the separators "r" (ref),
+		// "t" (time) and "h" (hash). None of the three is a hex digit, so a
+		// reader always sees where a field ends.
 		got := buildDevVersion("1.9.2", "my-feature", sha, ts)
 		want := "1.9.2-r7b5b4fa7t20260127094959h1a2b3c4"
 		if got != want {

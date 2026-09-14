@@ -37,7 +37,7 @@ $ GS_BRANCH_NAME=renovate/update-all-dependencies-to-latest gitsemver get
 
 The schema changed once. `validate --type dev` still accepts the superseded `X.Y.Z-dev.<branch>.<YYYY-MM-DD>.<HH-MM-SS>[.h<commit-sha>]` format, because tags in that format are already published. `get` only ever generates the current one. See [RFC: semver-based automatic upgrades](https://github.com/giantswarm/rfc/tree/main/semver-based-automatic-upgrades).
 
-The RFC spells the three separators `b`, `t` and `c`. This tool uses `r` (ref), `t` (time) and `h` (hash) instead, because `b` and `c` are hex digits and a reader cannot see where a field ends. Every other property is unchanged: the field order, the widths, the CRC variant and the 33-character total. [RFC PR #159](https://github.com/giantswarm/rfc/pull/159) amends the RFC to match.
+The three separators are `r` (ref), `t` (time) and `h` (hash), as the RFC decision of 2026-09-10 specifies. An earlier draft of the RFC spelled them `b`, `t` and `c`, but `b` and `c` are hex digits and hide the field boundaries. This tool never generated tags in that draft format.
 
 **Sort order.** A current tag sorts *above* a superseded one at the same `X.Y.Z`, because `r` > `d` in the first pre-release identifier. A consumer therefore moves to the current schema at once:
 
@@ -45,10 +45,13 @@ The RFC spells the three separators `b`, `t` and `c`. This tool uses `r` (ref), 
 1.2.4-dev.my-feature.2026-01-27.09-49-59.h1a2b3c4  <  1.2.4-r7b5b4fa7t20260127094959h1a2b3c4
 ```
 
-Against an `-rc.N` tag at the same base the order depends on the first digit of the branch hash: `0` to `b` sort below the RC, `c` to `f` above it. Select dev builds by branch, which keeps them out of an RC range anyway:
+Against an `-rc.N` tag at the same base the order depends on the first digit of the branch hash: `0` to `b` sort below the RC, `c` to `f` above it. Do not select dev builds with a bare semVer range. Use a filter that pins the width of every field, so it can never match an `-rc.N` tag:
 
 ```yaml
-semverFilter: ".*-r7b5b4fa7t.*"
+# any dev build
+semverFilter: "^.*-r[0-9a-f]{8}t[0-9]{14}h[0-9a-f]{7}$"
+# dev builds of one branch, here my-feature
+semverFilter: "^.*-r7b5b4fa7t[0-9]{14}h[0-9a-f]{7}$"
 ```
 
 ## Environment variables

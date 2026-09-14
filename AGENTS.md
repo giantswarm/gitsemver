@@ -53,18 +53,16 @@ pkg/project/       Version/GitSHA/BuildTimestamp metadata
 - `tagRegex` matches `vX.Y.Z` and `vX.Y.Z-rc.N` (no leading zeros)
 - `stableTagRegex` matches only `vX.Y.Z`
 
-**Dev build tags** follow [RFC: semver-based automatic upgrades](https://github.com/giantswarm/rfc/tree/main/semver-based-automatic-upgrades),
-except for the separator letters: the RFC spells them `b`, `t` and `c`, this tool uses `r` (ref), `t` (time)
-and `h` (hash), because `b` and `c` are hex digits and hide the field boundaries. RFC PR #159 amends the
-RFC to match.
+**Dev build tags** follow [RFC: semver-based automatic upgrades](https://github.com/giantswarm/rfc/tree/main/semver-based-automatic-upgrades).
+The separators are `r` (ref), `t` (time) and `h` (hash), as the RFC decision of 2026-09-10 specifies. An
+earlier draft spelled them `b`, `t` and `c`; this tool never generated that format.
 The pre-release part is always 33 characters and holds no `.` and no `-`, so a caller that concatenates the
 version into a Kubernetes label and trims it cannot cut the pre-release part on an illegal character (a
 prefix long enough to push the cut into `X.Y.Z` can still land on the leading `-`). A current tag sorts
 _above_ a superseded one at the same `X.Y.Z`, because `r` > `d`. Against `-rc.N` at the same base the order
 depends on the first digit of the branch hash: `0` to `b` below the RC, `c` to `f` above it — select dev
-builds with a `.*-r<hash>t.*` filter, not a bare range. None of `r`, `t` and `h` is a hex digit, so a reader
-can always tell where a field ends. `BranchHash` uses
-CRC-32/ISO-HDLC (`hash/crc32.ChecksumIEEE`) — not the POSIX `cksum` variant. Nothing in the tag is ever
+builds with a width-pinned filter (`^.*-r<hash>t[0-9]{14}h[0-9a-f]{7}$`), not a bare range. None of `r`, `t`
+and `h` is a hex digit, so a reader can always tell where a field ends. `BranchHash` uses CRC-32/ISO-HDLC (`hash/crc32.ChecksumIEEE`) — not the POSIX `cksum` variant. Nothing in the tag is ever
 truncated. `IsValidDev` also accepts the superseded `-dev.<branch>.<date>.<time>[.h<sha>]` schema, because
 tags in that format are already published; `ResolveVersion` only ever generates the current one.
 
