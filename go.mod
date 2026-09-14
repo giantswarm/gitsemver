@@ -2,7 +2,7 @@ module github.com/giantswarm/gitsemver/v2
 
 go 1.25.0
 
-toolchain go1.26.6
+toolchain go1.27.1
 
 require (
 	github.com/go-git/go-billy/v5 v5.9.1
