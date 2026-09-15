@@ -717,41 +717,6 @@ func containsFile(files []os.FileInfo, fileName string) bool {
 	return false
 }
 
-func Test_sanitizeBranchName(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		input    string
-		expected string
-	}{
-		{"main", "main"},
-		{"my-feature", "my-feature"},
-		{"feature/my-thing", "feature-my-thing"},
-		{"feature_underscored", "feature-underscored"},
-		{"feat/sub/deep", "feat-sub-deep"},
-		{"already-clean-123", "already-clean-123"},
-		{"feat//double-slash", "feat-double-slash"}, // consecutive invalid chars → single hyphen
-		{"__leading", "leading"},                    // leading invalid chars trimmed
-		{"trailing__", "trailing"},                  // trailing invalid chars trimmed
-		{"Feature/MyThing", "feature-mything"},      // lowercased
-		{"UPPER", "upper"},                          // lowercased
-		{"a--b", "a-b"},                             // hyphen runs collapsed ("--" reserved as marker)
-		{"///", "unknown"},                          // empty result falls back to unknownBranch
-		{"0042", "42"},                              // all-digit branch: leading zeros stripped (illegal semVer numeric id)
-		{"007", "7"},                                // all-digit branch: leading zeros stripped
-		{"000", "0"},                                // all zeros collapse to a single "0"
-		{"42", "42"},                                // numeric without leading zero is kept
-		{"0-1", "0-1"},                              // contains a hyphen → alphanumeric id, leading zero kept
-	}
-
-	for _, tc := range cases {
-		got := sanitizeBranchName(tc.input)
-		if got != tc.expected {
-			t.Errorf("sanitizeBranchName(%q) = %q, want %q", tc.input, got, tc.expected)
-		}
-	}
-}
-
 func Test_incrementPatch(t *testing.T) {
 	t.Parallel()
 

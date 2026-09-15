@@ -79,16 +79,21 @@ func currentBranch() string {
 	return head.Name().Short()
 }
 
-// sanitizeBranchName reduces a branch name to the DNS-label / semVer-safe
+// SanitizeBranchName reduces a branch name to the DNS-label / semVer-safe
 // character set [a-z0-9-]: it lowercases, replaces every run of other
 // characters (and hyphen runs) with a single hyphen and trims leading/trailing
 // hyphens. An empty result falls back to unknownBranch.
+//
+// It does not shorten the result. A dev version additionally truncates the
+// branch to fit its length bound, and that bound depends on the version base,
+// so a caller that needs the branch exactly as a dev tag carries it wants
+// DevVersionBranch instead.
 //
 // A purely-numeric result is a semVer numeric identifier, which forbids leading
 // zeros (spec §9), so leading zeros are stripped to keep the dev version a valid
 // semVer string (e.g. branch "0042" -> "42"). A name containing any non-digit is
 // an alphanumeric identifier where leading zeros are allowed and kept.
-func sanitizeBranchName(branch string) string {
+func SanitizeBranchName(branch string) string {
 	b := strings.Trim(branchSanitizeRegex.ReplaceAllString(strings.ToLower(branch), "-"), "-")
 	if b == "" {
 		return unknownBranch
@@ -171,18 +176,53 @@ func buildDevVersion(base, branch, commitSHA string, t time.Time, maxLen int) (s
 	}
 	hash := devHashPrefix + short
 
-	// Characters consumed by everything except the branch:
-	//   base + "-dev." + branch + "." + date + "." + clock + "." + hash
-	overhead := len(base) + len("-dev.") + 1 + len(date) + 1 + len(clock) + 1 + len(hash)
-	branchBudget := maxLen - overhead
-	if branchBudget < 1 {
-		return "", &ExecutionFailedError{message: fmt.Sprintf(
-			"cannot fit a dev version for base %q within %d characters (fixed parts need %d)",
-			base, maxLen, overhead+1)}
+	branchBudget, err := devBranchBudget(base, len(hash), maxLen)
+	if err != nil {
+		return "", err
 	}
 
 	branch = truncateBranch(branch, branchBudget)
 	return fmt.Sprintf("%s-dev.%s.%s.%s.%s", base, branch, date, clock, hash), nil
+}
+
+// devBranchBudget returns how many characters the branch segment of a dev
+// version for base may occupy when the whole version must fit maxLen. hashLen is
+// the length of the trailing "h<sha>" segment. It is the single definition of
+// the budget: a caller that recomputes it and gets it wrong builds a semVer
+// filter that matches no tag, and nothing reports the mismatch.
+func devBranchBudget(base string, hashLen, maxLen int) (int, error) {
+	// Characters consumed by everything except the branch:
+	//   base + "-dev." + branch + "." + date + "." + clock + "." + hash
+	// The date and clock segments are fixed-width by their layout.
+	overhead := len(base) + len("-dev.") + 1 + len("2006-01-02") + 1 + len("15-04-05") + 1 + hashLen
+	budget := maxLen - overhead
+	if budget < 1 {
+		return 0, &ExecutionFailedError{message: fmt.Sprintf(
+			"cannot fit a dev version for base %q within %d characters (fixed parts need %d)",
+			base, maxLen, overhead+1)}
+	}
+	return budget, nil
+}
+
+// DevVersionBranch returns the branch identifier exactly as a dev version for
+// versionBase carries it: SanitizeBranchName, then the middle truncation that
+// keeps the whole version within maxLen characters. maxLen <= 0 selects the
+// default (GS_MAX_VERSION_LENGTH, else 63).
+//
+// Build every semVer filter for the dev builds of a branch from this, never
+// from a local copy of the transformation. The branch budget is what is left of
+// maxLen after the base, timestamp and commit hash, so a branch of ordinary
+// length is already truncated: at the default 63 with an "X.Y.Z" base only 24
+// characters remain. A filter carrying a differently-shortened branch matches
+// no tag at all, and neither Flux nor this library reports the mismatch.
+//
+// It returns an error when the fixed parts of the version already exceed maxLen.
+func DevVersionBranch(branch, versionBase string, maxLen int) (string, error) {
+	budget, err := devBranchBudget(versionBase, len(devHashPrefix)+devShortSHALen, resolveMaxVersionLength(maxLen))
+	if err != nil {
+		return "", err
+	}
+	return truncateBranch(SanitizeBranchName(branch), budget), nil
 }
 
 func incrementPatch(version string) (string, error) {
@@ -619,7 +659,7 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 			return "", err
 		}
 	}
-	branch := sanitizeBranchName(currentBranch())
+	branch := SanitizeBranchName(currentBranch())
 	t := commit.Committer.When.UTC()
 	pseudoVersion, err := buildDevVersion(base, branch, commit.Hash.String(), t, resolveMaxVersionLength(r.maxVersionLength))
 	if err != nil {

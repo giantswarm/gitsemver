@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `gitsemver.SanitizeBranchName` is now a public function of the library. It is the transformation
+  that turns a branch name into the `[a-z0-9-]` form a dev tag carries (lowercase, runs of other
+  characters collapsed to a single hyphen, ends trimmed, leading zeros stripped from an all-digit
+  name).
+- `gitsemver.DevVersionBranch` returns the branch identifier exactly as a dev version for a given
+  version base carries it: `SanitizeBranchName` followed by the middle truncation that keeps the
+  whole version within the length bound. Callers that build a semVer filter for the dev builds of a
+  branch should use it instead of copying the logic, because the branch budget is what is left of
+  the bound after the base, timestamp and commit hash: at the default 63 with an `X.Y.Z` base only
+  24 characters remain, so a branch of ordinary length is already truncated.
+
+No generated dev version changes: both functions expose the existing behaviour unchanged.
+
 ## [2.0.1] - 2026-06-08
 
 ### Fixed

@@ -24,7 +24,8 @@ github.com/giantswarm/gitsemver/v2   (module)
 main.go                               CLI entry point (cobra commands)
 main_test.go                          CLI integration tests
 pkg/gitsemver/
-  repo.go          Repo struct, New(), ResolveVersion(), NextVersion(), buildVersionMaps()
+  repo.go          Repo struct, New(), ResolveVersion(), NextVersion(), buildVersionMaps(),
+                   SanitizeBranchName(), DevVersionBranch() (public branch transformation)
   next.go          ComputeNextVersion(), parseVersionString(), compareSemver()
   validate.go      IsValid*(), semver regex definitions (numID, semverParseRegex)
   funcs.go         TopLevel(), HeadTag()

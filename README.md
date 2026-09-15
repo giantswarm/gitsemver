@@ -129,3 +129,23 @@ repo, err := gitsemver.New(c)
 version, err := repo.ResolveVersion(ctx, "HEAD")
 // e.g. "1.2.4-dev.my-feature.2026-01-27.09-49-59.h1a2b3c4"
 ```
+
+### Branch names in dev tags
+
+A dev tag carries the branch in a sanitized, length-bounded form, not verbatim. Anything that
+builds a semVer filter for the dev builds of a branch must derive it from these functions rather
+than reimplement them — a filter built from a differently-shortened branch matches no tag, and
+nothing reports the mismatch.
+
+```go
+gitsemver.SanitizeBranchName("Feature/MyThing")
+// "feature-mything"
+
+gitsemver.DevVersionBranch("renovate/update-all-dependencies-to-latest", "1.2.4", 0)
+// "renovate-up--s-to-latest", nil
+```
+
+`DevVersionBranch` returns the segment exactly as a dev version for that base carries it. The
+branch budget is whatever the length bound leaves after the base, timestamp and commit hash, so at
+the default 63 with an `X.Y.Z` base only 24 characters remain and an ordinary branch name is
+already truncated. Pass `0` for `maxLen` to use the default (`GS_MAX_VERSION_LENGTH`, else 63).

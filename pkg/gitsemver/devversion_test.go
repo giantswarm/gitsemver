@@ -154,3 +154,43 @@ func Test_resolveMaxVersionLength(t *testing.T) {
 		})
 	}
 }
+
+// Test_DevVersionBranch_matchesBuildDevVersion is the anti-drift check that the
+// whole export exists for: the segment DevVersionBranch hands a caller must be
+// the segment a real dev version carries. A filter built from a segment that
+// differs by one character matches no tag, and nothing reports it.
+func Test_DevVersionBranch_matchesBuildDevVersion(t *testing.T) {
+	t.Parallel()
+
+	ts := time.Date(2026, 1, 27, 9, 49, 59, 0, time.UTC)
+	sha := "1a2b3c4d5e6f7a8b9c0d"
+
+	branches := []string{
+		"main",
+		"my-feature",
+		"Feature/MyThing",
+		"renovate/update-all-dependencies-to-latest",
+		"renovate/update-all-the-dependencies-to-their-very-latest-published-versions",
+		"0042",
+	}
+	bases := []string{"0.0.0", "1.2.4", "10.12.346", "100.200.3456"}
+
+	for _, base := range bases {
+		for _, branch := range branches {
+			segment, err := DevVersionBranch(branch, base, 63)
+			if err != nil {
+				t.Fatalf("DevVersionBranch(%q, %q): unexpected error: %v", branch, base, err)
+			}
+			// ResolveVersion sanitizes before it builds, so mirror that here.
+			version, err := buildDevVersion(base, SanitizeBranchName(branch), sha, ts, 63)
+			if err != nil {
+				t.Fatalf("buildDevVersion(%q, %q): unexpected error: %v", base, branch, err)
+			}
+			want := "-dev." + segment + "."
+			if !strings.Contains(version, want) {
+				t.Errorf("branch %q base %q: version %q does not carry the segment %q from DevVersionBranch",
+					branch, base, version, segment)
+			}
+		}
+	}
+}
