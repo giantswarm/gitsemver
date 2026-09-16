@@ -20,7 +20,7 @@ Version resolution rules:
 
 ## Module and package layout
 
-```
+```text
 github.com/giantswarm/gitsemver/v3   (module)
 main.go                               CLI entry point (cobra commands)
 main_test.go                          CLI integration tests
@@ -62,7 +62,8 @@ prefix long enough to push the cut into `X.Y.Z` can still land on the leading `-
 _above_ a superseded one at the same `X.Y.Z`, because `r` > `d`. Against `-rc.N` at the same base the order
 depends on the first digit of the branch hash: `0` to `b` below the RC, `c` to `f` above it — select dev
 builds with a width-pinned filter (`^.*-r<hash>t[0-9]{14}h[0-9a-f]{7}$`), not a bare range. None of `r`, `t`
-and `h` is a hex digit, so a reader can always tell where a field ends. `BranchHash` uses CRC-32/ISO-HDLC (`hash/crc32.ChecksumIEEE`) — not the POSIX `cksum` variant. Nothing in the tag is ever
+and `h` is a hex digit, so a reader can always tell where a field ends. `BranchHash` uses CRC-32/ISO-HDLC
+(`hash/crc32.ChecksumIEEE`) — not the POSIX `cksum` variant. Nothing in the tag is ever
 truncated. `IsValidDev` also accepts the superseded `-dev.<branch>.<date>.<time>[.h<sha>]` schema, because
 tags in that format are already published; `ResolveVersion` only ever generates the current one.
 
