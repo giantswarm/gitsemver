@@ -129,7 +129,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - feat!: Repository and Go module renamed from `gitrepo` to `gitsemver`. CLI binary renamed from
   `gitrepo-version` to `gitsemver`. Import path changed to `github.com/giantswarm/gitsemver/pkg/gitsemver`.
 - feat: implement the tagging RFC
-  (https://github.com/giantswarm/rfc/tree/main/semver-based-automatic-upgrades)
+  (<https://github.com/giantswarm/rfc/tree/main/semver-based-automatic-upgrades>)
 - feat: add tag validation API
 
 ## [0.3.5] - 2026-05-13
@@ -186,7 +186,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - Upgrade go-git and go-billy dependencies to their new location. Moving from github.com/src-d to
   github.com/go-git. v4 to v5 is a drop-in replacement, see
-  https://github.com/go-git/go-git/releases/tag/v5.0.0
+  <https://github.com/go-git/go-git/releases/tag/v5.0.0>
 
 ## [0.2.2] - 2021-04-16
 

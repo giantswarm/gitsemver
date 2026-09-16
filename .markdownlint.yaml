@@ -1,0 +1,12 @@
+# Config for markdownlint-cli, run via .pre-commit-config.yaml.
+
+# MD013/line-length
+MD013:
+  line_length: 120
+  code_blocks: false
+  tables: false
+
+# MD024/no-duplicate-heading
+# The CHANGELOG repeats "Added"/"Changed"/"Fixed" under every release heading.
+MD024:
+  siblings_only: true

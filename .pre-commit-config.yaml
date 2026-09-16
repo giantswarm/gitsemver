@@ -51,7 +51,7 @@ repos:
           - --max-same-issues=0
           - --max-issues-per-linter=0
       - id: go-imports
-        args: [ -local, github.com/giantswarm/gitsemver/v2 ]
+        args: [ -local, github.com/giantswarm/gitsemver/v3 ]
 
   # Markdown hooks
   - repo: https://github.com/igorshubovych/markdownlint-cli
