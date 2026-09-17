@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-09-17
+
 ### Fixed
 
 - The module path is `github.com/giantswarm/gitsemver/v3` again. The v3.0.0 release commit moved it to
@@ -252,7 +254,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - Functions signature for `EnsureUpToDate` and `ResolveVersion`.
 
-[Unreleased]: https://github.com/giantswarm/gitsemver/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/giantswarm/gitsemver/compare/v3.0.1...HEAD
+[3.0.1]: https://github.com/giantswarm/gitsemver/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/giantswarm/gitsemver/compare/v2.0.1...v3.0.0
 [2.0.1]: https://github.com/giantswarm/gitsemver/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/giantswarm/gitsemver/compare/v1.1.2...v2.0.0
