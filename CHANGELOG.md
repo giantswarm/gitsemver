@@ -7,6 +7,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- The module path is `github.com/giantswarm/gitsemver/v3` again. The v3.0.0 release commit moved it to
+  `github.com/giantswarm/gitsemver/v4`, so the published tag declares a major that does not match its own
+  version. Neither path resolves at that revision:
+
+  ```text
+  go: github.com/giantswarm/gitsemver/v3@v3.0.0: invalid version: go.mod has non-.../v3 module path
+      "github.com/giantswarm/gitsemver/v4" (and .../v3/go.mod does not exist) at revision v3.0.0
+  ```
+
+  **v3.0.0 is unusable as a Go dependency. Import v3.0.1 or later instead.** The released v3.0.0 CLI
+  binaries are correct and need no action; only the Go module is affected.
+
+  Cause: `create-release-pr.yaml` in [github-workflows](https://github.com/giantswarm/github-workflows)
+  runs `mod upgrade` on every `X.0.0` release, and that tool increments the module major instead of
+  setting it to the release major. [#274](https://github.com/giantswarm/gitsemver/pull/274) had already
+  moved the path to `/v3` by hand, so the release commit raised it a second time. Every Go repo that
+  updates its module path in the breaking-change PR hits this on a major release.
+
 ## [3.0.0] - 2026-09-16
 
 ### Changed
