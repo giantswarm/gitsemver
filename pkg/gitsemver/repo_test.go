@@ -1062,3 +1062,118 @@ func Test_Repo_ResolveVersion_mixedStableRC_picksHighestSemver(t *testing.T) {
 		t.Errorf("got %d warnings in %q, want exactly one", n, warn.String())
 	}
 }
+
+// HEAD carrying a promoted release candidate (vX.Y.Z and its vX.Y.Z-rc.N)
+// resolves to the stable tag, with and without a tag prefix. Tags naming
+// different versions, or a version tag beside a non-version tag, still error.
+func Test_Repo_HeadTag_multipleTags(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name      string
+		tagPrefix string
+		tags      []string
+		want      string
+		wantErr   bool
+	}{
+		{
+			name: "promoted RC, stable created first",
+			tags: []string{"v2.5.0", "v2.5.0-rc.6"},
+			want: "v2.5.0",
+		},
+		{
+			name: "promoted RC, stable created last",
+			tags: []string{"v2.5.0-rc.2", "v2.5.0-rc.10", "v2.5.0"},
+			want: "v2.5.0",
+		},
+		{
+			name: "RC-only same core picks the highest RC",
+			tags: []string{"v2.5.0-rc.10", "v2.5.0-rc.2"},
+			want: "v2.5.0-rc.10",
+		},
+		{
+			name:      "promoted RC with prefix",
+			tagPrefix: "module-a",
+			tags:      []string{"module-a/v1.2.0", "module-a/v1.2.0-rc.1", "module-b/v3.0.0"},
+			want:      "module-a/v1.2.0",
+		},
+		{
+			name:    "distinct versions",
+			tags:    []string{"v2.5.0", "v2.6.0"},
+			wantErr: true,
+		},
+		{
+			name:    "distinct versions, one an RC",
+			tags:    []string{"v2.5.0", "v2.6.0-rc.1"},
+			wantErr: true,
+		},
+		{
+			name:      "distinct versions with prefix",
+			tagPrefix: "module-a",
+			tags:      []string{"module-a/v1.2.0", "module-a/v1.3.0-rc.1"},
+			wantErr:   true,
+		},
+		{
+			name:    "version tag beside a non-version tag",
+			tags:    []string{"v2.5.0", "test-tag"},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(tagPrefixEnvVarName, tc.tagPrefix)
+
+			repo, gitRepo := newTestRepo(t)
+			h := testCreateCommit(t, gitRepo, "a.txt", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+			for _, tag := range tc.tags {
+				if _, err := gitRepo.CreateTag(tag, h, nil); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			tag, err := repo.HeadTag(ctx)
+			if tc.wantErr {
+				if !errors.Is(err, &ExecutionFailedError{}) {
+					t.Fatalf("HeadTag = %q, %v, want an ExecutionFailedError", tag, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("HeadTag: unexpected error %v", err)
+			}
+			if tag != tc.want {
+				t.Errorf("HeadTag = %q, want %q", tag, tc.want)
+			}
+		})
+	}
+}
+
+// Release candidates of one X.Y.Z core on one commit (vX.Y.Z-rc.1 and
+// vX.Y.Z-rc.2) share a core: the highest RC wins and no warning is written.
+func Test_Repo_ResolveVersion_rcOnlySameCore_isSilent(t *testing.T) {
+	ctx := context.Background()
+
+	repo, gitRepo := newTestRepo(t)
+	var warn bytes.Buffer
+	repo.warn = &warn
+
+	h := testCreateCommit(t, gitRepo, "a.txt", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+	// Highest RC created first to prove selection is by semver, not insertion order.
+	for _, tag := range []string{"v1.0.0-rc.2", "v1.0.0-rc.1"} {
+		if _, err := gitRepo.CreateTag(tag, h, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	version, err := repo.ResolveVersion(ctx, h.String())
+	if err != nil {
+		t.Fatalf("ResolveVersion: unexpected error %v", err)
+	}
+	if version != "1.0.0-rc.2" {
+		t.Errorf("ResolveVersion = %q, want %q", version, "1.0.0-rc.2")
+	}
+	if out := warn.String(); out != "" {
+		t.Errorf("unexpected warning for release candidates of one core: %q", out)
+	}
+}
