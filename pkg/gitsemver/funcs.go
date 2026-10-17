@@ -7,7 +7,9 @@ import (
 )
 
 // TopLevel finds absolute path of top-level git directory. The output is the
-// same as `git rev-parse --show-toplevel`.
+// same as `git rev-parse --show-toplevel`. Like git, it accepts a .git file
+// as well as a .git directory: a linked worktree or a submodule has a file
+// that points at its git directory.
 func TopLevel(path string) (string, error) {
 	p, err := filepath.Abs(path)
 	if err != nil {
@@ -28,7 +30,7 @@ func TopLevel(path string) (string, error) {
 			// Fall trough.
 		} else if err != nil {
 			return "", err
-		} else if f.IsDir() {
+		} else if f.IsDir() || f.Mode().IsRegular() {
 			return p, nil
 		}
 

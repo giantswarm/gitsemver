@@ -7,7 +7,6 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -18,11 +17,9 @@ import (
 	"github.com/go-git/go-billy/v5/osfs"
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/cache"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
-	"github.com/go-git/go-git/v5/storage/filesystem"
 )
 
 // tagRegex and stableTagRegex reuse numID (from validate.go) so that the
@@ -54,7 +51,15 @@ func CurrentBranch() string {
 	if b := strings.TrimSpace(os.Getenv(branchEnvVarName)); b != "" {
 		return b
 	}
-	repo, err := git.PlainOpenWithOptions(".", &git.PlainOpenOptions{DetectDotGit: true})
+	topLevel, err := TopLevel(".")
+	if err != nil {
+		return unknownBranch
+	}
+	storage, err := newRepoStorage(topLevel)
+	if err != nil {
+		return unknownBranch
+	}
+	repo, err := git.Open(storage, osfs.New(topLevel))
 	if err != nil {
 		return unknownBranch
 	}
@@ -127,7 +132,7 @@ type Repo struct {
 	url string
 
 	auth     transport.AuthMethod
-	storage  *filesystem.Storage
+	storage  *repoStorage
 	worktree billy.Filesystem
 
 	// warn is where non-fatal warnings (e.g. a commit carrying multiple
@@ -150,8 +155,10 @@ func New(config Config) (*Repo, error) {
 	}
 
 	worktree := osfs.New(config.Dir)
-	fs := osfs.New(filepath.Join(config.Dir, ".git"))
-	storage := filesystem.NewStorageWithOptions(fs, cache.NewObjectLRUDefault(), filesystem.Options{})
+	storage, err := newRepoStorage(config.Dir)
+	if err != nil {
+		return nil, &InvalidConfigError{message: fmt.Sprintf("%T.Dir %#q: %s", config, config.Dir, err)}
+	}
 
 	// When URL is not configured assume the repository is cloned on disk
 	// and take the URL or origin remote.
