@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- `gitsemver get` works in a linked git worktree, where `.git` is a file pointing at the worktree's git
+  directory, and prints the same version as the main checkout at the same commit. It also opens a repository
+  with `extensions.worktreeConfig` set, which go-git refuses with `core.repositoryformatversion does not
+  support extension: worktreeconfig`. The dev build's branch fingerprint uses the worktree's branch.
+
 ## [3.0.1] - 2026-09-17
 
 ### Fixed
