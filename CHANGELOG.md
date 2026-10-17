@@ -7,14 +7,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [3.0.2-rc.11] - 2026-10-17
+
 ### Fixed
 
 - `Repo.HeadTag` returns the stable tag of a promoted release candidate instead of failing with `HEAD ref has
   multiple tags [vX.Y.Z vX.Y.Z-rc.N]`. Several tags naming different versions on HEAD still fail.
 
+## [3.0.2-rc.10] - 2026-10-17
+
+### Fixed
+
 - `gitsemver get` no longer warns about a commit carrying `vX.Y.Z` and `vX.Y.Z-rc.N`, which every promoted
   release candidate does; the stable tag wins silently. A commit whose tags name different versions still
   writes one warning.
+
+## [3.0.2-rc.9] - 2026-10-17
+
+### Fixed
 
 - `gitsemver get` works in a linked git worktree, where `.git` is a file pointing at the worktree's git
   directory, and prints the same version as the main checkout at the same commit. It also opens a repository
@@ -268,7 +278,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - Functions signature for `EnsureUpToDate` and `ResolveVersion`.
 
-[Unreleased]: https://github.com/giantswarm/gitsemver/compare/v3.0.1...HEAD
+[Unreleased]: https://github.com/giantswarm/gitsemver/compare/v3.0.2-rc.11...HEAD
+[3.0.2-rc.11]: https://github.com/giantswarm/gitsemver/compare/v3.0.2-rc.10...v3.0.2-rc.11
+[3.0.2-rc.10]: https://github.com/giantswarm/gitsemver/compare/v3.0.2-rc.9...v3.0.2-rc.10
+[3.0.2-rc.9]: https://github.com/giantswarm/gitsemver/compare/v3.0.1...v3.0.2-rc.9
 [3.0.1]: https://github.com/giantswarm/gitsemver/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/giantswarm/gitsemver/compare/v2.0.1...v3.0.0
 [2.0.1]: https://github.com/giantswarm/gitsemver/compare/v2.0.0...v2.0.1
