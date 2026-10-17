@@ -9,6 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 
+- `Repo.HeadTag` returns the stable tag of a promoted release candidate instead of failing with `HEAD ref has
+  multiple tags [vX.Y.Z vX.Y.Z-rc.N]`. Several tags naming different versions on HEAD still fail.
+
 - `gitsemver get` no longer warns about a commit carrying `vX.Y.Z` and `vX.Y.Z-rc.N`, which every promoted
   release candidate does; the stable tag wins silently. A commit whose tags name different versions still
   writes one warning.

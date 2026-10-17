@@ -288,6 +288,10 @@ func (r *Repo) HeadSHA(ctx context.Context) (string, error) {
 //
 // Note: if GS_GIT_TAG_PREFIX is not set, all tags matching the prefixed tag regex are filtered out!
 //
+// When HEAD carries several version tags of one X.Y.Z core (a promoted release
+// candidate: vX.Y.Z and vX.Y.Z-rc.N), the highest, the stable tag, is returned.
+// Any other set of several tags is an *ExecutionFailedError.
+//
 // It returns a *ReferenceNotFoundError when the HEAD ref is not tagged,
 // detectable via errors.Is(err, &ReferenceNotFoundError{}).
 func (r *Repo) HeadTag(ctx context.Context) (string, error) {
@@ -328,11 +332,31 @@ func (r *Repo) HeadTag(ctx context.Context) (string, error) {
 	if len(filteredTags) == 0 {
 		return "", &ReferenceNotFoundError{message: fmt.Sprintf("HEAD ref is not tagged (filtered for prefix: '%s')", tagPrefix)}
 	}
-	if len(filteredTags) > 1 {
+	if len(filteredTags) == 1 {
+		return filteredTags[0], nil
+	}
+
+	// Several version tags of one X.Y.Z core are the result of promoting a
+	// release candidate (vX.Y.Z on the commit of vX.Y.Z-rc.N): the highest,
+	// the stable one, wins. Anything else on one commit is ambiguous.
+	chosen, severalVersions, err := highestVersionTag(filteredTags, tagVersionFunc(tagPrefix))
+	if err != nil || severalVersions {
 		return "", &ExecutionFailedError{message: fmt.Sprintf("HEAD ref has multiple tags %v (filtered for prefix: '%s')", filteredTags, tagPrefix)}
 	}
 
-	return filteredTags[0], nil
+	return chosen, nil
+}
+
+// tagVersionFunc returns the function that maps a tag name to the bare version
+// string compareSemver understands: tagPrefix, its "/" separator and the
+// leading "v" stripped.
+func tagVersionFunc(tagPrefix string) func(string) string {
+	if tagPrefix == "" {
+		return func(t string) string { return strings.TrimPrefix(t, "v") }
+	}
+	return func(t string) string {
+		return strings.TrimPrefix(strings.TrimPrefix(t, tagPrefix+"/"), "v")
+	}
 }
 
 // buildVersionMaps filters tagsByHash by tagPrefix and returns two maps keyed
@@ -349,14 +373,7 @@ func buildVersionMaps(warn io.Writer, tagsByHash map[string][]string, tagPrefix 
 	versionsByHash = map[string]string{}
 	stableVersionsByHash = map[string]string{}
 
-	// versionOf strips the prefix and leading "v" so the remainder can be
-	// parsed and compared by compareSemver.
-	versionOf := func(t string) string { return strings.TrimPrefix(t, "v") }
-	if tagPrefix != "" {
-		versionOf = func(t string) string {
-			return strings.TrimPrefix(strings.TrimPrefix(t, tagPrefix+"/"), "v")
-		}
-	}
+	versionOf := tagVersionFunc(tagPrefix)
 
 	for hash, tags := range tagsByHash {
 		var versionTags, stableTags []string
@@ -379,21 +396,17 @@ func buildVersionMaps(warn io.Writer, tagsByHash map[string][]string, tagPrefix 
 		}
 
 		if len(versionTags) > 0 {
-			chosen, err := highestVersionTag(versionTags, versionOf)
+			chosen, severalVersions, err := highestVersionTag(versionTags, versionOf)
 			if err != nil {
 				return nil, nil, err
 			}
-			ambiguous, err := namesSeveralVersions(versionTags, versionOf)
-			if err != nil {
-				return nil, nil, err
-			}
-			if ambiguous {
+			if severalVersions {
 				_, _ = fmt.Fprintf(warn, "warning: commit %s carries multiple version tags %s; using the highest, %q\n", hash, strings.Join(versionTags, ", "), chosen)
 			}
 			versionsByHash[hash] = versionOf(chosen)
 		}
 		if len(stableTags) > 0 {
-			chosen, err := highestVersionTag(stableTags, versionOf)
+			chosen, _, err := highestVersionTag(stableTags, versionOf)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -403,46 +416,32 @@ func buildVersionMaps(warn io.Writer, tagsByHash map[string][]string, tagPrefix 
 	return versionsByHash, stableVersionsByHash, nil
 }
 
-// namesSeveralVersions reports whether tags, all on one commit, name more than
-// one X.Y.Z core. vX.Y.Z and its vX.Y.Z-rc.N share a core.
-func namesSeveralVersions(tags []string, versionOf func(string) string) (bool, error) {
-	var first parsedVersion
-	for i, t := range tags {
-		parsed, err := parseVersionString(versionOf(t))
-		if err != nil {
-			return false, err
-		}
-		if i == 0 {
-			first = parsed
-			continue
-		}
-		if parsed.major != first.major || parsed.minor != first.minor || parsed.patch != first.patch {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 // highestVersionTag returns the tag with the highest semver precedence among
-// tags, all of which are assumed to belong to the same commit. versionOf maps a
-// tag name to the bare version string that compareSemver understands (prefix
-// and leading "v" stripped). tags must be non-empty.
-func highestVersionTag(tags []string, versionOf func(string) string) (string, error) {
-	best := tags[0]
+// tags, all of which are assumed to belong to the same commit, and reports
+// whether they name more than one X.Y.Z core (vX.Y.Z and its vX.Y.Z-rc.N share
+// a core), in one parse pass. versionOf maps a tag name to the bare version
+// string that compareSemver understands (prefix and leading "v" stripped).
+// tags must be non-empty.
+func highestVersionTag(tags []string, versionOf func(string) string) (best string, severalVersions bool, err error) {
+	best = tags[0]
 	bestParsed, err := parseVersionString(versionOf(best))
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
+	first := bestParsed
 	for _, t := range tags[1:] {
 		parsed, err := parseVersionString(versionOf(t))
 		if err != nil {
-			return "", err
+			return "", false, err
+		}
+		if parsed.major != first.major || parsed.minor != first.minor || parsed.patch != first.patch {
+			severalVersions = true
 		}
 		if compareSemver(parsed, bestParsed) > 0 {
 			best, bestParsed = t, parsed
 		}
 	}
-	return best, nil
+	return best, severalVersions, nil
 }
 
 // ResolveVersion resolves the version for a git reference:

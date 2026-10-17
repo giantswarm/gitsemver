@@ -18,6 +18,8 @@ Version resolution rules:
 - When a commit carries multiple version tags, the **highest semver tag wins**. Tags sharing one `X.Y.Z` core
   (`vX.Y.Z` with its `vX.Y.Z-rc.N`, the result of a promote) are silent; tags naming different versions write one
   warning per commit to `warn`
+- `Repo.HeadTag` follows the same rule: HEAD carrying `vX.Y.Z` and its `vX.Y.Z-rc.N` returns `vX.Y.Z`; several tags
+  naming different versions (or a non-version tag beside a version tag) still fail
 
 ## Module and package layout
 
