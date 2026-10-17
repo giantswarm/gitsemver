@@ -944,10 +944,62 @@ func Test_Repo_ResolveVersion_multipleTagsOnSameCommit_picksHighest(t *testing.T
 	}
 
 	out := warn.String()
+	if n := strings.Count(out, "warning:"); n != 1 {
+		t.Errorf("got %d warnings in %q, want exactly one for the ambiguous commit", n, out)
+	}
 	for _, want := range []string{"v1.0.0", "v1.0.1", "v1.2.0"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("warning %q does not list discovered tag %q", out, want)
 		}
+	}
+}
+
+// Promoting a release candidate tags its commit with the stable version, so
+// vX.Y.Z and vX.Y.Z-rc.N on one commit are expected: the stable tag wins and
+// no warning is written, neither for the tagged commit nor for a dev build on
+// top of a history of promoted releases.
+func Test_Repo_ResolveVersion_promotedRC_isSilent(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv(branchEnvVarName, "test-branch")
+
+	repo, gitRepo := newTestRepo(t)
+	var warn bytes.Buffer
+	repo.warn = &warn
+
+	first := testCreateCommit(t, gitRepo, "a.txt", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+	// Stable created first to prove selection is by semver, not insertion order.
+	for _, tag := range []string{"v1.0.0", "v1.0.0-rc.1"} {
+		if _, err := gitRepo.CreateTag(tag, first, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	promoted := testCreateCommit(t, gitRepo, "b.txt", time.Date(2020, 1, 1, 1, 0, 0, 0, time.UTC))
+	for _, tag := range []string{"v1.1.0", "v1.1.0-rc.2", "v1.1.0-rc.10"} {
+		if _, err := gitRepo.CreateTag(tag, promoted, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	head := testCreateCommit(t, gitRepo, "c.txt", time.Date(2020, 1, 1, 2, 0, 0, 0, time.UTC))
+
+	version, err := repo.ResolveVersion(ctx, promoted.String())
+	if err != nil {
+		t.Fatalf("ResolveVersion: unexpected error %v", err)
+	}
+	if version != "1.1.0" {
+		t.Errorf("ResolveVersion = %q, want %q (the stable tag of the promoted RC)", version, "1.1.0")
+	}
+
+	version, err = repo.ResolveVersion(ctx, head.String())
+	if err != nil {
+		t.Fatalf("ResolveVersion: unexpected error %v", err)
+	}
+	want := "1.1.1-r57a8dd33t20200101020000h" + head.String()[:7]
+	if version != want {
+		t.Errorf("ResolveVersion = %q, want %q (dev base from the promoted 1.1.0)", version, want)
+	}
+
+	if out := warn.String(); out != "" {
+		t.Errorf("unexpected warning for promoted release candidates: %q", out)
 	}
 }
 
@@ -1004,5 +1056,9 @@ func Test_Repo_ResolveVersion_mixedStableRC_picksHighestSemver(t *testing.T) {
 	// compareSemver §11: v1.0.1-rc.1 > v1.0.0 (patch 1 > 0), so the RC is chosen.
 	if version != "1.0.1-rc.1" {
 		t.Errorf("ResolveVersion = %q, want %q", version, "1.0.1-rc.1")
+	}
+	// The tags name two versions, 1.0.0 and 1.0.1: ambiguous, so one warning.
+	if n := strings.Count(warn.String(), "warning:"); n != 1 {
+		t.Errorf("got %d warnings in %q, want exactly one", n, warn.String())
 	}
 }

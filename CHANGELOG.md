@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 
+- `gitsemver get` no longer warns about a commit carrying `vX.Y.Z` and `vX.Y.Z-rc.N`, which every promoted
+  release candidate does; the stable tag wins silently. A commit whose tags name different versions still
+  writes one warning.
+
 - `gitsemver get` works in a linked git worktree, where `.git` is a file pointing at the worktree's git
   directory, and prints the same version as the main checkout at the same commit. It also opens a repository
   with `extensions.worktreeConfig` set, which go-git refuses with `core.repositoryformatversion does not

@@ -15,8 +15,9 @@ Version resolution rules:
 - Commit carrying `vX.Y.Z` → prints `X.Y.Z`
 - Commit carrying `vX.Y.Z-rc.N` → prints `X.Y.Z-rc.N`
 - Untagged commit → dev build: `X.Y.(Z+1)-r<CRC32-of-branch>t<YYYYMMDDHHMMSS>h<7-char-SHA>`
-- When a commit carries multiple version tags, the **highest semver tag wins** and a warning is written to
-  `warn`
+- When a commit carries multiple version tags, the **highest semver tag wins**. Tags sharing one `X.Y.Z` core
+  (`vX.Y.Z` with its `vX.Y.Z-rc.N`, the result of a promote) are silent; tags naming different versions write one
+  warning per commit to `warn`
 
 ## Module and package layout
 
