@@ -339,10 +339,12 @@ func (r *Repo) HeadTag(ctx context.Context) (string, error) {
 // by commit SHA: versionsByHash (all semver tags) and stableVersionsByHash
 // (stable-only tags). Version strings in both maps have no leading "v".
 //
-// When a single commit carries more than one version tag — which happens, for
-// example, when several tags point at the same commit — the highest tag in
-// semver terms is chosen and a warning listing every discovered tag and the
-// chosen one is written to warn.
+// When a single commit carries more than one version tag, the highest tag in
+// semver terms is chosen. Tags that share one X.Y.Z core are the expected
+// result of promoting a release candidate (vX.Y.Z on the commit of
+// vX.Y.Z-rc.N) and stay silent; tags naming different cores are ambiguous, and
+// one warning listing every discovered tag and the chosen one is written to
+// warn.
 func buildVersionMaps(warn io.Writer, tagsByHash map[string][]string, tagPrefix string) (versionsByHash, stableVersionsByHash map[string]string, err error) {
 	versionsByHash = map[string]string{}
 	stableVersionsByHash = map[string]string{}
@@ -381,7 +383,11 @@ func buildVersionMaps(warn io.Writer, tagsByHash map[string][]string, tagPrefix 
 			if err != nil {
 				return nil, nil, err
 			}
-			if len(versionTags) > 1 {
+			ambiguous, err := namesSeveralVersions(versionTags, versionOf)
+			if err != nil {
+				return nil, nil, err
+			}
+			if ambiguous {
 				_, _ = fmt.Fprintf(warn, "warning: commit %s carries multiple version tags %s; using the highest, %q\n", hash, strings.Join(versionTags, ", "), chosen)
 			}
 			versionsByHash[hash] = versionOf(chosen)
@@ -395,6 +401,26 @@ func buildVersionMaps(warn io.Writer, tagsByHash map[string][]string, tagPrefix 
 		}
 	}
 	return versionsByHash, stableVersionsByHash, nil
+}
+
+// namesSeveralVersions reports whether tags, all on one commit, name more than
+// one X.Y.Z core. vX.Y.Z and its vX.Y.Z-rc.N share a core.
+func namesSeveralVersions(tags []string, versionOf func(string) string) (bool, error) {
+	var first parsedVersion
+	for i, t := range tags {
+		parsed, err := parseVersionString(versionOf(t))
+		if err != nil {
+			return false, err
+		}
+		if i == 0 {
+			first = parsed
+			continue
+		}
+		if parsed.major != first.major || parsed.minor != first.minor || parsed.patch != first.patch {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // highestVersionTag returns the tag with the highest semver precedence among
