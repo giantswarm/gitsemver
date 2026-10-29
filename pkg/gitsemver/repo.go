@@ -733,6 +733,19 @@ func (r *Repo) checkoutRef(ref string) (*git.Worktree, error) {
 	return worktree, nil
 }
 
+// peelTag follows a tag that points at another tag, like dexidp/dex's v2.8.0,
+// to the last tag in the chain, the one that points at a commit, tree or blob.
+func peelTag(repo *git.Repository, tag *object.Tag) (*object.Tag, error) {
+	for tag.TargetType == plumbing.TagObject {
+		next, err := repo.TagObject(tag.Target)
+		if err != nil {
+			return nil, err
+		}
+		tag = next
+	}
+	return tag, nil
+}
+
 func (r *Repo) tags(repo *git.Repository) (map[string][]string, error) {
 	tags := map[string][]string{}
 
@@ -762,11 +775,15 @@ func (r *Repo) tags(repo *git.Repository) (map[string][]string, error) {
 		defer tagObjectsIter.Close()
 
 		err = tagObjectsIter.ForEach(func(tag *object.Tag) error {
-			commit, err := tag.Commit()
+			target, err := peelTag(repo, tag)
 			if err != nil {
 				return err
 			}
-			tags[commit.Hash.String()] = append(tags[commit.Hash.String()], tag.Name)
+			// A tag on a tree or a blob is never in a commit's history.
+			if target.TargetType != plumbing.CommitObject {
+				return nil
+			}
+			tags[target.Target.String()] = append(tags[target.Target.String()], tag.Name)
 			return nil
 		})
 		if err != nil {
