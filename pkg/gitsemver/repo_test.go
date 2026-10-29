@@ -917,6 +917,51 @@ func Test_Repo_ResolveVersion_nonReachableTagIgnored(t *testing.T) {
 	}
 }
 
+// An annotated tag can point at another tag object instead of a commit, like
+// dexidp/dex's v2.8.0 and v2.12.0. A tag can also point at a tree, like the
+// Linux kernel's v2.6.11-tree. ResolveVersion must follow the first to its
+// commit and skip the second, instead of failing on either.
+func Test_Repo_ResolveVersion_tagsNotOnACommit(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv(branchEnvVarName, "test-branch")
+
+	repo, gitRepo := newTestRepo(t)
+
+	base := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	tagger := &object.Signature{Name: "test", Email: "t@t.com", When: base}
+
+	stableHash := testCreateCommit(t, gitRepo, "stable.txt", base)
+	// Like in dex, the inner tag object carries the same name as the outer one,
+	// and only the outer one is still a ref.
+	inner, err := gitRepo.CreateTag("v1.0.0", stableHash, &git.CreateTagOptions{Tagger: tagger, Message: "v1.0.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gitRepo.DeleteTag("v1.0.0"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gitRepo.CreateTag("v1.0.0", inner.Hash(), &git.CreateTagOptions{Tagger: tagger, Message: "v1.0.0"}); err != nil {
+		t.Fatal(err)
+	}
+	stable, err := gitRepo.CommitObject(stableHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gitRepo.CreateTag("tree", stable.TreeHash, &git.CreateTagOptions{Tagger: tagger, Message: "tree"}); err != nil {
+		t.Fatal(err)
+	}
+	headHash := testCreateCommit(t, gitRepo, "head.txt", base.Add(time.Hour))
+
+	version, err := repo.ResolveVersion(ctx, headHash.String())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "1.0.1-r57a8dd33t20200101010000h" + headHash.String()[:devShortSHALen]
+	if version != want {
+		t.Errorf("ResolveVersion = %q, want %q", version, want)
+	}
+}
+
 // A commit carrying multiple version tags must not error: ResolveVersion picks
 // the highest-semver tag and emits a warning listing every discovered tag and
 // the one chosen.

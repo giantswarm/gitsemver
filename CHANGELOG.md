@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- `gitsemver get` no longer fails with `unsupported object type` in a repository with an annotated tag that points at
+  another tag, like dexidp/dex's `v2.8.0` and `v2.12.0`. A tag that points at a tree or a blob is skipped.
+
 ## [3.0.2-rc.11] - 2026-10-17
 
 ### Fixed
