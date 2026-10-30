@@ -288,6 +288,9 @@ func (r *Repo) HeadSHA(ctx context.Context) (string, error) {
 //
 // Note: if GS_GIT_TAG_PREFIX is not set, all tags matching the prefixed tag regex are filtered out!
 //
+// If GS_GIT_TAG_SUFFIX is set, only the fork's own release tags vX.Y.Z-<suffix>.N
+// are candidates, and upstream's tags on the same commit are ignored.
+//
 // When HEAD carries several version tags of one X.Y.Z core (a promoted release
 // candidate: vX.Y.Z and vX.Y.Z-rc.N), the highest, the stable tag, is returned.
 // Any other set of several tags is an *ExecutionFailedError.
@@ -312,16 +315,29 @@ func (r *Repo) HeadTag(ctx context.Context) (string, error) {
 
 	tags := tagsBySHA[head.Hash().String()]
 
-	tagPrefix := os.Getenv(tagPrefixEnvVarName)
+	scheme, err := tagSchemeFromEnv()
+	if err != nil {
+		return "", err
+	}
+	tagPrefix := scheme.prefix
 
 	var filteredTags []string
-	if tagPrefix != "" {
+	switch {
+	case scheme.suffix != "":
+		// Upstream's tags share the fork's commits, so only the fork's own
+		// release tags are candidates.
+		for _, tag := range tags {
+			if scheme.isVersionTag(tag) {
+				filteredTags = append(filteredTags, tag)
+			}
+		}
+	case tagPrefix != "":
 		for _, tag := range tags {
 			if strings.HasPrefix(tag, tagPrefix+"/") {
 				filteredTags = append(filteredTags, tag)
 			}
 		}
-	} else {
+	default:
 		for _, tag := range tags {
 			if !prefixedTagRegex.MatchString(tag) {
 				filteredTags = append(filteredTags, tag)
@@ -330,7 +346,7 @@ func (r *Repo) HeadTag(ctx context.Context) (string, error) {
 	}
 
 	if len(filteredTags) == 0 {
-		return "", &ReferenceNotFoundError{message: fmt.Sprintf("HEAD ref is not tagged (filtered for prefix: '%s')", tagPrefix)}
+		return "", &ReferenceNotFoundError{message: fmt.Sprintf("HEAD ref is not tagged (filtered for prefix: '%s', suffix: '%s')", tagPrefix, scheme.suffix)}
 	}
 	if len(filteredTags) == 1 {
 		return filteredTags[0], nil
@@ -339,29 +355,18 @@ func (r *Repo) HeadTag(ctx context.Context) (string, error) {
 	// Several version tags of one X.Y.Z core are the result of promoting a
 	// release candidate (vX.Y.Z on the commit of vX.Y.Z-rc.N): the highest,
 	// the stable one, wins. Anything else on one commit is ambiguous.
-	chosen, severalVersions, err := highestVersionTag(filteredTags, tagVersionFunc(tagPrefix))
+	chosen, severalVersions, err := highestVersionTag(filteredTags, scheme.parse)
 	if err != nil || severalVersions {
-		return "", &ExecutionFailedError{message: fmt.Sprintf("HEAD ref has multiple tags %v (filtered for prefix: '%s')", filteredTags, tagPrefix)}
+		return "", &ExecutionFailedError{message: fmt.Sprintf("HEAD ref has multiple tags %v (filtered for prefix: '%s', suffix: '%s')", filteredTags, tagPrefix, scheme.suffix)}
 	}
 
 	return chosen, nil
 }
 
-// tagVersionFunc returns the function that maps a tag name to the bare version
-// string compareSemver understands: tagPrefix, its "/" separator and the
-// leading "v" stripped.
-func tagVersionFunc(tagPrefix string) func(string) string {
-	if tagPrefix == "" {
-		return func(t string) string { return strings.TrimPrefix(t, "v") }
-	}
-	return func(t string) string {
-		return strings.TrimPrefix(strings.TrimPrefix(t, tagPrefix+"/"), "v")
-	}
-}
-
-// buildVersionMaps filters tagsByHash by tagPrefix and returns two maps keyed
-// by commit SHA: versionsByHash (all semver tags) and stableVersionsByHash
-// (stable-only tags). Version strings in both maps have no leading "v".
+// buildVersionMaps filters tagsByHash by the tag scheme and returns two maps
+// keyed by commit SHA: versionsByHash (the version tags) and
+// stableVersionsByHash (the X.Y.Z of the tags a dev version counts up from).
+// Version strings in both maps have no leading "v".
 //
 // When a single commit carries more than one version tag, the highest tag in
 // semver terms is chosen. Tags that share one X.Y.Z core are the expected
@@ -369,48 +374,41 @@ func tagVersionFunc(tagPrefix string) func(string) string {
 // vX.Y.Z-rc.N) and stay silent; tags naming different cores are ambiguous, and
 // one warning listing every discovered tag and the chosen one is written to
 // warn.
-func buildVersionMaps(warn io.Writer, tagsByHash map[string][]string, tagPrefix string) (versionsByHash, stableVersionsByHash map[string]string, err error) {
+func buildVersionMaps(warn io.Writer, tagsByHash map[string][]string, scheme tagScheme) (versionsByHash, stableVersionsByHash map[string]string, err error) {
 	versionsByHash = map[string]string{}
 	stableVersionsByHash = map[string]string{}
-
-	versionOf := tagVersionFunc(tagPrefix)
 
 	for hash, tags := range tagsByHash {
 		var versionTags, stableTags []string
 		for _, t := range tags {
-			if tagPrefix != "" {
-				if prefixedTagRegex.MatchString(t) && strings.HasPrefix(t, tagPrefix+"/") {
-					versionTags = append(versionTags, t)
-					if stableTagRegex.MatchString(strings.TrimPrefix(t, tagPrefix+"/")) {
-						stableTags = append(stableTags, t)
-					}
-				}
-			} else {
-				if tagRegex.MatchString(t) {
-					versionTags = append(versionTags, t)
-					if stableTagRegex.MatchString(t) {
-						stableTags = append(stableTags, t)
-					}
-				}
+			if scheme.isVersionTag(t) {
+				versionTags = append(versionTags, t)
+			}
+			if scheme.isBaseTag(t) {
+				stableTags = append(stableTags, t)
 			}
 		}
 
 		if len(versionTags) > 0 {
-			chosen, severalVersions, err := highestVersionTag(versionTags, versionOf)
+			chosen, severalVersions, err := highestVersionTag(versionTags, scheme.parse)
 			if err != nil {
 				return nil, nil, err
 			}
 			if severalVersions {
 				_, _ = fmt.Fprintf(warn, "warning: commit %s carries multiple version tags %s; using the highest, %q\n", hash, strings.Join(versionTags, ", "), chosen)
 			}
-			versionsByHash[hash] = versionOf(chosen)
+			versionsByHash[hash] = scheme.version(chosen)
 		}
 		if len(stableTags) > 0 {
-			chosen, _, err := highestVersionTag(stableTags, versionOf)
+			chosen, _, err := highestVersionTag(stableTags, scheme.parse)
 			if err != nil {
 				return nil, nil, err
 			}
-			stableVersionsByHash[hash] = versionOf(chosen)
+			pv, err := scheme.parse(chosen)
+			if err != nil {
+				return nil, nil, err
+			}
+			stableVersionsByHash[hash] = fmt.Sprintf("%d.%d.%d", pv.major, pv.minor, pv.patch)
 		}
 	}
 	return versionsByHash, stableVersionsByHash, nil
@@ -419,18 +417,17 @@ func buildVersionMaps(warn io.Writer, tagsByHash map[string][]string, tagPrefix 
 // highestVersionTag returns the tag with the highest semver precedence among
 // tags, all of which are assumed to belong to the same commit, and reports
 // whether they name more than one X.Y.Z core (vX.Y.Z and its vX.Y.Z-rc.N share
-// a core), in one parse pass. versionOf maps a tag name to the bare version
-// string that compareSemver understands (prefix and leading "v" stripped).
-// tags must be non-empty.
-func highestVersionTag(tags []string, versionOf func(string) string) (best string, severalVersions bool, err error) {
+// a core), in one parse pass. parse maps a tag name to its version for
+// precedence. tags must be non-empty.
+func highestVersionTag(tags []string, parse func(string) (parsedVersion, error)) (best string, severalVersions bool, err error) {
 	best = tags[0]
-	bestParsed, err := parseVersionString(versionOf(best))
+	bestParsed, err := parse(best)
 	if err != nil {
 		return "", false, err
 	}
 	first := bestParsed
 	for _, t := range tags[1:] {
-		parsed, err := parseVersionString(versionOf(t))
+		parsed, err := parse(t)
 		if err != nil {
 			return "", false, err
 		}
@@ -466,6 +463,12 @@ func highestVersionTag(tags []string, versionOf func(string) string) (best strin
 // If GS_GIT_TAG_PREFIX is set, only tags prefixed with "<value>/" are considered,
 // e.g. "module-a/v1.2.3". The prefix, separator, and "v" are stripped from the result.
 //
+// If GS_GIT_TAG_SUFFIX is set, the versions are the tags vX.Y.Z-<value>.N, e.g.
+// "v2.46.1-gs.1" → "2.46.1-gs.1": a fork's releases on top of upstream's release
+// vX.Y.Z. A dev version counts up from the highest version among those tags and
+// upstream's stable vX.Y.Z tags reachable from the reference, not from the most
+// recent by date.
+//
 // It returns a *ReferenceNotFoundError when the reference cannot be resolved,
 // detectable via errors.Is(err, &ReferenceNotFoundError{}).
 func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
@@ -474,13 +477,16 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 		return "", err
 	}
 
-	tagPrefix := os.Getenv(tagPrefixEnvVarName)
+	scheme, err := tagSchemeFromEnv()
+	if err != nil {
+		return "", err
+	}
 
 	tagsByHash, err := r.tags(repo)
 	if err != nil {
 		return "", err
 	}
-	versionsByHash, stableVersionsByHash, err := buildVersionMaps(r.warn, tagsByHash, tagPrefix)
+	versionsByHash, stableVersionsByHash, err := buildVersionMaps(r.warn, tagsByHash, scheme)
 	if err != nil {
 		return "", err
 	}
@@ -500,6 +506,17 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 	// When the commit is tagged return the tag.
 	if version, ok := versionsByHash[commit.Hash.String()]; ok {
 		return version, nil
+	}
+
+	// A fork's own release and upstream's newer release can both be in the
+	// history, after upstream was merged in. The most recent tag by date may
+	// then be the fork's older one, so a fork takes the highest of all.
+	if scheme.suffix != "" {
+		base, err := highestReachableBase(repo, commit, stableVersionsByHash)
+		if err != nil {
+			return "", err
+		}
+		return buildDevVersion(base, CurrentBranch(), commit.Hash.String(), commit.Committer.When.UTC()), nil
 	}
 
 	// Otherwise walk ancestors to find the most recent stable tagged parent,
@@ -566,6 +583,39 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 	return buildDevVersion(base, CurrentBranch(), commit.Hash.String(), t), nil
 }
 
+// highestReachableBase returns the dev version base, X.Y.(Z+1), of the highest
+// version in stableVersionsByHash among commit and its ancestors, or "0.0.0"
+// when there is none.
+func highestReachableBase(repo *git.Repository, commit *object.Commit, stableVersionsByHash map[string]string) (string, error) {
+	iter, err := repo.Log(&git.LogOptions{From: commit.Hash})
+	if err != nil {
+		return "", err
+	}
+	var best string
+	var bestParsed parsedVersion
+	err = iter.ForEach(func(c *object.Commit) error {
+		v, ok := stableVersionsByHash[c.Hash.String()]
+		if !ok {
+			return nil
+		}
+		parsed, err := parseVersionString(v)
+		if err != nil {
+			return err
+		}
+		if best == "" || compareSemver(parsed, bestParsed) > 0 {
+			best, bestParsed = v, parsed
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	if best == "" {
+		return "0.0.0", nil
+	}
+	return incrementPatch(best)
+}
+
 // NextVersion returns the next version tag after the highest-semver tag
 // reachable from HEAD for the given bumpType.
 //
@@ -577,20 +627,27 @@ func (r *Repo) ResolveVersion(ctx context.Context, ref string) (string, error) {
 // are valid.
 //
 // The returned string never carries a leading "v". If GS_GIT_TAG_PREFIX is set,
-// only tags carrying that prefix are considered (monorepo support).
+// only tags carrying that prefix are considered (monorepo support). If
+// GS_GIT_TAG_SUFFIX is set, it returns an *InvalidConfigError.
 func (r *Repo) NextVersion(ctx context.Context, bumpType string) (string, error) {
 	repo, err := git.Open(r.storage, r.worktree)
 	if err != nil {
 		return "", err
 	}
 
-	tagPrefix := os.Getenv(tagPrefixEnvVarName)
+	scheme, err := tagSchemeFromEnv()
+	if err != nil {
+		return "", err
+	}
+	if scheme.suffix != "" {
+		return "", &InvalidConfigError{message: fmt.Sprintf("next does not support %s: a fork's next release follows upstream's", tagSuffixEnvVarName)}
+	}
 
 	tagsByHash, err := r.tags(repo)
 	if err != nil {
 		return "", err
 	}
-	versionsByHash, _, err := buildVersionMaps(r.warn, tagsByHash, tagPrefix)
+	versionsByHash, _, err := buildVersionMaps(r.warn, tagsByHash, scheme)
 	if err != nil {
 		return "", err
 	}
