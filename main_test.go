@@ -95,3 +95,13 @@ func Test_newRootCmd_registersBranchHash(t *testing.T) {
 		}
 	}
 }
+
+func Test_runNext_lastTag_suffixRefused(t *testing.T) {
+	t.Setenv("GS_GIT_TAG_SUFFIX", "gs")
+
+	err := runNext("patch", "v1.2.3")
+
+	if err == nil {
+		t.Error("runNext with GS_GIT_TAG_SUFFIX set should return error")
+	}
+}

@@ -78,6 +78,7 @@ semverFilter: "^.*-r7b5b4fa7t[0-9]{14}h[0-9a-f]{7}$"
 | --- | --- |
 | `GS_BRANCH_NAME` | Override the branch name that dev build versions are fingerprinted from. Defaults to the HEAD branch of the repo, then `"unknown"`. |
 | `GS_GIT_TAG_PREFIX` | Monorepo support: only consider tags prefixed with `"<value>/"`, e.g. `module-a/v1.2.3`. |
+| `GS_GIT_TAG_SUFFIX` | Fork support: the versions are the tags `vX.Y.Z-<value>.N`, e.g. `v2.46.1-gs.1` for a fork's first release on top of upstream's `v2.46.1`. Upstream's tags stay in the repository and are no version of the fork, but a dev version counts up from the highest reachable `vX.Y.Z-<value>.N` or `vX.Y.Z`, by version, not by date. `next` refuses to run, and `validate` doesn't know these versions. A dev version after `v2.46.1-gs.1` is `2.46.2-r…`, which sorts above the fork's next release `2.46.1-gs.2`, so don't rely on the order between dev builds and releases. Can't be combined with `GS_GIT_TAG_PREFIX`. |
 
 ## CLI — `gitsemver`
 

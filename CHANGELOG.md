@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `GS_GIT_TAG_SUFFIX` for a fork that builds on upstream's releases and keeps upstream's tags. With
+  `GS_GIT_TAG_SUFFIX=gs`, `gitsemver get` returns `2.46.1-gs.1` for the tag `v2.46.1-gs.1`, ignores upstream's own tags
+  as versions, and counts a dev version up from the highest reachable `vX.Y.Z-gs.N` or `vX.Y.Z`.
+
 ### Fixed
 
 - `gitsemver get` no longer fails with `unsupported object type` in a repository with an annotated tag that points at

@@ -42,6 +42,9 @@
 //	                    "<value>/", e.g. "module-a/v1.2.3". The "next --last-tag"
 //	                    flag accepts both prefixed ("module-a/v1.2.3") and bare
 //	                    ("v1.2.3") forms; the prefix is stripped automatically.
+//	GS_GIT_TAG_SUFFIX   Fork support: the versions are the tags
+//	                    "vX.Y.Z-<value>.N" on top of upstream's release vX.Y.Z,
+//	                    e.g. "v2.46.1-gs.1". "next" refuses to run.
 package main
 
 import (
@@ -213,6 +216,11 @@ func openRepo(topLevel string) (*gitsemver.Repo, error) {
 func runNext(bumpType, lastTag string) error {
 	if !slices.Contains(gitsemver.ValidBumpTypes, bumpType) {
 		return fmt.Errorf("unknown bump type %q: must be one of %s", bumpType, strings.Join(gitsemver.ValidBumpTypes, ", "))
+	}
+
+	// Repo.NextVersion refuses a suffix too, but --last-tag never reaches it.
+	if strings.TrimSpace(os.Getenv("GS_GIT_TAG_SUFFIX")) != "" {
+		return errors.New("next does not support GS_GIT_TAG_SUFFIX: a fork's next release follows upstream's")
 	}
 
 	lastTag = strings.TrimSpace(lastTag)

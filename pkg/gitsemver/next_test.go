@@ -21,13 +21,13 @@ func Test_parseVersionString(t *testing.T) {
 		// stable, large numbers
 		{"v10.20.30", parsedVersion{major: 10, minor: 20, patch: 30}, false},
 		// RC, with v prefix
-		{"v1.2.3-rc.1", parsedVersion{major: 1, minor: 2, patch: 3, isRC: true, rcNum: 1}, false},
+		{"v1.2.3-rc.1", parsedVersion{major: 1, minor: 2, patch: 3, isPre: true, preNum: 1}, false},
 		// RC, no v prefix
-		{"1.2.3-rc.1", parsedVersion{major: 1, minor: 2, patch: 3, isRC: true, rcNum: 1}, false},
+		{"1.2.3-rc.1", parsedVersion{major: 1, minor: 2, patch: 3, isPre: true, preNum: 1}, false},
 		// RC, large rc number
-		{"v1.0.0-rc.99", parsedVersion{major: 1, minor: 0, patch: 0, isRC: true, rcNum: 99}, false},
+		{"v1.0.0-rc.99", parsedVersion{major: 1, minor: 0, patch: 0, isPre: true, preNum: 99}, false},
 		// RC, zero base
-		{"v0.0.0-rc.1", parsedVersion{major: 0, minor: 0, patch: 0, isRC: true, rcNum: 1}, false},
+		{"v0.0.0-rc.1", parsedVersion{major: 0, minor: 0, patch: 0, isPre: true, preNum: 1}, false},
 		// empty string
 		{"", parsedVersion{}, true},
 		// not semver

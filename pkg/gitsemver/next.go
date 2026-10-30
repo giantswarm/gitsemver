@@ -26,11 +26,12 @@ var ValidBumpTypes = []string{
 	BumpTypeRC, BumpTypeRCRelease,
 }
 
-// parsedVersion holds the numeric components of a semver string.
+// parsedVersion holds the numeric components of a semver string. isPre and
+// preNum are a pre-release "-<label>.N": "-rc.N", or a fork's "-<suffix>.N".
 type parsedVersion struct {
 	major, minor, patch int
-	isRC                bool
-	rcNum               int
+	isPre               bool
+	preNum              int
 }
 
 // semverParseRegex matches X.Y.Z or X.Y.Z-rc.N with an optional leading v.
@@ -58,8 +59,8 @@ func parseVersionString(v string) (parsedVersion, error) {
 		return parsedVersion{}, &ExecutionFailedError{message: fmt.Sprintf("patch component of %q overflows int: %v", v, err)}
 	}
 	if m[4] != "" {
-		pv.isRC = true
-		if pv.rcNum, err = strconv.Atoi(m[4]); err != nil {
+		pv.isPre = true
+		if pv.preNum, err = strconv.Atoi(m[4]); err != nil {
 			return parsedVersion{}, &ExecutionFailedError{message: fmt.Sprintf("RC number in %q overflows int: %v", v, err)}
 		}
 	}
@@ -88,15 +89,15 @@ func compareSemver(a, b parsedVersion) int {
 		return 1
 	}
 	switch {
-	case !a.isRC && !b.isRC:
+	case !a.isPre && !b.isPre:
 		return 0
-	case a.isRC && !b.isRC:
+	case a.isPre && !b.isPre:
 		return -1 // a is RC, b is stable → a < b
-	case !a.isRC && b.isRC:
+	case !a.isPre && b.isPre:
 		return 1 // a is stable, b is RC → a > b
 	default:
-		if a.rcNum != b.rcNum {
-			if a.rcNum < b.rcNum {
+		if a.preNum != b.preNum {
+			if a.preNum < b.preNum {
 				return -1
 			}
 			return 1
@@ -131,7 +132,7 @@ func ComputeNextVersion(lastTag, bumpType string) (string, error) {
 
 	switch bumpType {
 	case BumpTypePatch, BumpTypeMinor, BumpTypeMajor, BumpTypePatchRC, BumpTypeMinorRC, BumpTypeMajorRC:
-		if pv.isRC {
+		if pv.isPre {
 			return "", &ExecutionFailedError{message: fmt.Sprintf(
 				"bump type %q requires a stable last tag; %q is an RC — use 'rc' to bump the counter or 'rc-release' to finalize",
 				bumpType, lastTag,
@@ -152,15 +153,15 @@ func ComputeNextVersion(lastTag, bumpType string) (string, error) {
 			return fmt.Sprintf("%d.0.0-rc.1", pv.major+1), nil
 		}
 	case BumpTypeRC:
-		if !pv.isRC {
+		if !pv.isPre {
 			return "", &ExecutionFailedError{message: fmt.Sprintf(
 				"bump type 'rc' requires an RC last tag; %q is stable — use 'patch-rc', 'minor-rc', or 'major-rc' to start a new RC series",
 				lastTag,
 			)}
 		}
-		return fmt.Sprintf("%d.%d.%d-rc.%d", pv.major, pv.minor, pv.patch, pv.rcNum+1), nil
+		return fmt.Sprintf("%d.%d.%d-rc.%d", pv.major, pv.minor, pv.patch, pv.preNum+1), nil
 	case BumpTypeRCRelease:
-		if !pv.isRC {
+		if !pv.isPre {
 			return "", &ExecutionFailedError{message: fmt.Sprintf(
 				"bump type 'rc-release' requires an RC last tag; %q is already a stable release",
 				lastTag,
