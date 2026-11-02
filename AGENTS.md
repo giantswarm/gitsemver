@@ -30,6 +30,7 @@ main_test.go                          CLI integration tests
 pkg/gitsemver/
   repo.go          Repo struct, New(), ResolveVersion(), NextVersion(), buildVersionMaps()
   next.go          ComputeNextVersion(), parseVersionString(), compareSemver()
+  scheme.go        tagScheme: which tags are versions (plain, GS_GIT_TAG_PREFIX, GS_GIT_TAG_SUFFIX)
   validate.go      IsValid*(), semver regex definitions (numID, semverParseRegex)
   funcs.go         TopLevel()
   error.go         InvalidConfigError, ExecutionFailedError
@@ -43,13 +44,19 @@ pkg/project/       Version/GitSHA/BuildTimestamp metadata
 | ----------------------- | --------------------------------------------------------------------- |
 | `GS_BRANCH_NAME`        | Override the branch name that dev builds fingerprint                  |
 | `GS_GIT_TAG_PREFIX`     | Monorepo: only consider tags with this prefix, e.g. `module-a/v1.2.3` |
+| `GS_GIT_TAG_SUFFIX`     | Fork: the versions are `vX.Y.Z-<suffix>.N` on upstream's `vX.Y.Z`     |
 
 ## Key architectural notes
 
 **Version maps.** `buildVersionMaps` produces two maps keyed by commit hash:
 
 - `versionsByHash` — highest semver tag (stable or RC) per commit
-- `stableVersionsByHash` — highest _stable-only_ tag per commit
+- `stableVersionsByHash` — the `X.Y.Z` of the highest _stable-only_ tag per commit, the base of a dev version
+
+With `GS_GIT_TAG_SUFFIX`, the versions are the tags `vX.Y.Z-<suffix>.N`, and both those and upstream's stable
+`vX.Y.Z` count as the base of a dev version (`tagScheme` in `scheme.go`). The base is then the highest of all
+reachable ones (`highestReachableBase`), not the most recent by date, so a merged upstream release wins over the fork's
+older release.
 
 **Tag regexes:**
 
