@@ -18,6 +18,9 @@ import (
 // repository with, but that do not change how gitsemver reads one.
 // worktreeConfig only adds a per-worktree config.worktree file on top of the
 // shared config; objects, refs and HEAD are laid out as without it.
+// gitsemver reads only the shared config, so a per-worktree override in
+// config.worktree, such as remote.origin.url, is not seen by New. Version
+// resolution never uses the remote URL, so the version is unaffected.
 var ignoredExtensions = []string{"worktreeConfig"}
 
 // repoStorage is the filesystem storage of a checkout. Its config hides
